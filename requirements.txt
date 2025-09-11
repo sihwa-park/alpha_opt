@@ -1,4 +1,8 @@
 numpy
 scipy
 matplotlib
+simsopt
+vmecpp
+nlopt
+libensemble
 pytest

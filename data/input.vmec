@@ -1,0 +1,19 @@
+&INDATA
+delt=0.9
+nstep=200
+ns_array=9 51
+ftol_array=1e-06 3e-11
+niter_array=1000 2000
+lasym=False
+nfp=4
+mpol=6
+ntor=6
+phiedge=1.0
+am=0 0 
+curtor=0
+ncurr=1
+ac=0 0 
+Rbc(0,0)    =  1.0
+Rbc(0,1)    = -0.1
+Zbs(0,1)    = -0.1
+/
