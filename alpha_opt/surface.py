@@ -14,6 +14,7 @@ def init_optimizable_surface(
     elongation=2.0,
     scale=True,
     exponential_spectral_scaling_alpha=1.0,
+    verbose=True,
 ):
     pre_surface = SurfaceRZFourier(
         mpol=m_max,
@@ -32,16 +33,18 @@ def init_optimizable_surface(
     # surface = SurfaceGarabedian(mmax=2, mmin=0, nmax=1, nmin=-1)
     surface = SurfaceGarabedian.from_RZFourier(pre_surface)
     # surface.change_resolution(mmax=2, mmin=0, nmax=1, nmin=-1)
-    print("initial x:", surface.x)
-    print(surface.local_dof_names)
+    if verbose:
+        print("initial x:", surface.x)
+        print(surface.local_dof_names)
     # exit(0)
     surface.set("Delta(1,0)", major_radius) # Set major radius
     surface.set("Delta(0,0)", minor_radius)  # Set minor radius
     surface.fix("Delta(0,0)")  # Minor radius
     surface.fix("Delta(1,0)")  # Major radius
     dim_x = len(surface.x)
-    print("x:", surface.x)
-    print("dof_names:", surface.dof_names)
+    if verbose:
+        print("x:", surface.x)
+        print("dof_names:", surface.dof_names)
     # vmec._should_save_outputs = True  # If you want wout files to be generated.
 
     # Compute x_scale for the dofs.
@@ -64,9 +67,9 @@ def init_optimizable_surface(
         x_scale = np.exp(-exponential_spectral_scaling_alpha * np.sqrt((ms - 1)**2 + ns**2))
     else:
         x_scale = np.ones_like(surface.x)
-        
-    print("x_scale:", x_scale)
 
+    if verbose:
+        print("x_scale:", x_scale)
 
     x0 = surface.x / x_scale
 
