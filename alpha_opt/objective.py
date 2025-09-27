@@ -1,6 +1,6 @@
 from simsopt._core import ObjectiveFailure
 
-def get_objective(vmec, surface, x_scale, raw_objective, fail_val=1000.0):
+def get_objective(vmec, surface, x_scale, raw_objective, fail_val=1000.0, save_convergence_history=True):
 
     def objective(x):
         surface.x = x * x_scale
@@ -56,7 +56,7 @@ def get_objective(vmec, surface, x_scale, raw_objective, fail_val=1000.0):
                 hdf.create_dataset("force_residual_lambda", data=vmec.wout.force_residual_lambda)
                 hdf.attrs["description"] = "Force residual (lambda component) vs iteration"
 
-        if vmec.wout is not None:
+        if save_convergence_history and vmec.wout is not None:
             # vmec.wout may not be changed from None if VMEC failed before iterating.
             with open("force_residual_history.txt", "w") as f_out:
                 f_out.write("# Iteration, Force residual r, Force residual z, Force residual lambda\n")
