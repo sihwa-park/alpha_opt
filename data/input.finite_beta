@@ -1,0 +1,23 @@
+&INDATA
+delt=0.9
+nstep=200
+ns_array=9 51
+ftol_array=1e-06 3e-11
+niter_array=1000 2000
+lasym=False
+nfp=4
+mpol=6
+ntor=6
+phiedge=73.0123415498694  ! B * pi * a^2 for B = 8 T
+am = 1, -2, 2, -1, -2, 4, -2.8, -0.4, 2.4, -1.2
+! -1.2*s**9 + 2.4*s**8 - 0.4*s**7 - 2.8*s**6 + 4*s**5 - 2*s**4 - s**3 + 2*s**2 - 2*s + 1
+pres_scale = 1441958.9706
+curtor=0
+ncurr=1
+ac=0 0
+! Rotating ellipse with Aminor of ARIES-CS, aspect ratio 6, elongation 2:
+RBC(   0,   0) =  1.022655736694316e+01,    ZBS(   0,   0) =  0.000000000000000e+00
+RBC(   1,   0) =  1.704426227823860e+00,    ZBS(   1,   0) = -1.704426227823860e+00
+RBC(   0,   1) =  1.704426227823860e+00,    ZBS(   0,   1) =  1.704426227823860e+00
+RBC(   1,   1) = -6.026056718632296e-01,    ZBS(   1,   1) =  6.026056718632296e-01
+/
