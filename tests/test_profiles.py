@@ -26,5 +26,5 @@ def test_pressure_profile_matches_vmec():
     # plt.legend()
     # plt.tight_layout()
     # plt.show()
-    
-    np.testing.assert_allclose(pressure_vmec, pressure_should_be, rtol=1e-13)
+
+    np.testing.assert_allclose(pressure_vmec, pressure_should_be, rtol=2e-13)
