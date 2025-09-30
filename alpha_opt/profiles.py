@@ -11,9 +11,22 @@ def DT_reaction_rate(ni, Ti_keV):
     """
     return ni * ni * (3.68e-12) * (Ti_keV**(-2.0/3.0) * np.exp(-19.94 * (Ti_keV**(-1.0/3.0))))
 
+"""Compute the relative DT reaction rate for our profiles, normalized to the value at s=0."""
 def relative_DT_reaction_rate_for_our_profiles(s):
     ni = n_m3_func(s) / 2
     ni0 = n_m3_func(0) / 2
     Ti_keV = T_keV_func(s)
     Ti0_keV = T_keV_func(0)
     return DT_reaction_rate(ni, Ti_keV) / DT_reaction_rate(ni0, Ti0_keV)
+
+"""Using rejection sampling, sample s according to the alpha birth profile."""
+def sample_alpha_birth_s():
+    bound = 1.0
+    x = np.random.uniform()
+    y = bound * np.random.uniform()
+
+    while relative_DT_reaction_rate_for_our_profiles(x) < y:
+        assert relative_DT_reaction_rate_for_our_profiles(x) <= bound
+        x = np.random.uniform()
+        y = bound * np.random.uniform()
+    return x

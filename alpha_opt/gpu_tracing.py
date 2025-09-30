@@ -28,33 +28,13 @@ else:
     from simsopt_firm3d.field import BoozerRadialInterpolant, InterpolatedBoozerField
     import simsoptpp_firm3d as sopp
 
+from .profiles import sample_alpha_birth_s
+
 # logging.basicConfig()
 # logger = logging.getLogger('simsopt.field.tracing')
 
 # Initialize vpar
 ALPHA_BIRTH_SPEED = np.sqrt(2 * ENERGY / MASS)
-
-# Compute the pdf of birth rate in s
-def s_density(s):
-    return (
-        ((1 - s**5) ** 2)
-        * ((1 - s) ** (-2 / 3))
-        * np.exp(-19.94 * (12 * (1 - s)) ** (-1 / 3))
-    )
-
-
-# Rejection sample s
-def sample_s():
-    bound = 3e-4
-    x = np.random.uniform()
-    y = bound * np.random.uniform()
-
-    while s_density(x) < y:
-        assert s_density(x) <= bound
-        x = np.random.uniform()
-        y = bound * np.random.uniform()
-    return x
-
 
 # Sample theta, zeta for a given s via rejection sampling
 def sample_tz(s, J_max, field):
@@ -79,7 +59,7 @@ def sample_tz(s, J_max, field):
 
 # Sample s,t,z
 def sample_stz(field, J_max):
-    s = sample_s()
+    s = sample_alpha_birth_s()
     theta, zeta = sample_tz(s, J_max, field)
     return np.array([s, theta, zeta])
 
