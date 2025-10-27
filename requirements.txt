@@ -5,4 +5,5 @@ simsopt
 vmecpp
 nlopt
 libensemble
+scikit-learn
 pytest
