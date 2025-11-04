@@ -18,15 +18,16 @@ from simsopt.util.constants import (
 )
 
 try:
-    import simsopt_firm3d
+    import firm3d
 except ImportError:
-    simsopt_firm3d = None
+    firm3d = None
 
-if simsopt_firm3d is None:
+if firm3d is None:
     from simsopt.field import BoozerRadialInterpolant, InterpolatedBoozerField
 else:
-    from simsopt_firm3d.field import BoozerRadialInterpolant, InterpolatedBoozerField
-    import simsoptpp_firm3d as sopp
+    from firm3d.field.boozermagneticfield import BoozerRadialInterpolant, InterpolatedBoozerField
+    from firm3d.util.gpu_utils import boozer_interpolant
+    import firm3dpp
 
 from .profiles import sample_alpha_birth_s
 
@@ -37,6 +38,7 @@ from .profiles import sample_alpha_birth_s
 ALPHA_BIRTH_SPEED = np.sqrt(2 * ENERGY / MASS)
 
 # Sample theta, zeta for a given s via rejection sampling
+# This function differs from the one in firm3d in that abs() is applied to J.
 def sample_tz(s, J_max, field):
     J = rand_J = 0
     while rand_J >= J:
@@ -62,42 +64,6 @@ def sample_stz(field, J_max):
     s = sample_alpha_birth_s()
     theta, zeta = sample_tz(s, J_max, field)
     return np.array([s, theta, zeta])
-
-
-# set up GPU interpolation grid
-def gen_bfield_info(field, srange, trange, zrange):
-
-    s_grid = np.linspace(srange[0], srange[1], srange[2])
-    theta_grid = np.linspace(trange[0], trange[1], trange[2])
-    zeta_grid = np.linspace(zrange[0], zrange[1], zrange[2])
-
-    quad_pts = np.empty((srange[2] * trange[2] * zrange[2], 3))
-    for i in range(srange[2]):
-        for j in range(trange[2]):
-            for k in range(zrange[2]):
-                quad_pts[trange[2] * zrange[2] * i + zrange[2] * j + k, :] = [
-                    s_grid[i],
-                    theta_grid[j],
-                    zeta_grid[k],
-                ]
-
-    field.set_points(quad_pts)
-    G = field.G()
-    iota = field.iota()
-    I = field.I()
-    modB = field.modB()
-    J = np.abs(G + iota * I) / (modB**2)
-    maxJ = np.max(J)  # for rejection sampling
-
-    psi0 = field.psi0
-
-    # Build interpolation data
-    modB_derivs = field.modB_derivs()
-
-    quad_info = np.hstack((modB, modB_derivs, G, iota))
-    quad_info = np.ascontiguousarray(quad_info)
-
-    return quad_info, maxJ, psi0
 
 
 class AlphaLosses(Optimizable):
@@ -160,22 +126,18 @@ class AlphaLosses(Optimizable):
 
         nfp = self.booz.nfp
         degree = 3
-        srange = (0, 1, 15)
-        thetarange = (0, np.pi, 15)
-        zetarange = (0, 2 * np.pi / nfp, 15)
+        n_metagrid_pts = 15
         field = InterpolatedBoozerField(
-            bri, degree, srange, thetarange, zetarange, True, nfp=nfp, stellsym=True
+            bri,
+            degree,
+            ns_interp=n_metagrid_pts,
+            ntheta_interp=n_metagrid_pts,
+            nzeta_interp=n_metagrid_pts,
         )
+        srange, trange, zrange, quad_info, maxJ = boozer_interpolant(field, nfp, n_metagrid_pts)
 
         # Evaluate error in interpolation
         print("Error in |B| interpolation", field.estimate_error_modB(1000), flush=True)
-
-        # generate grid with 15 simsopt grid pts
-        n_grid_pts = 15
-        srange = (0, 1, 3 * n_grid_pts + 1)
-        trange = (0, np.pi, 3 * n_grid_pts + 1)
-        zrange = (0, 2 * np.pi / nfp, 3 * n_grid_pts + 1)
-        quad_info, maxJ, psi0 = gen_bfield_info(field, srange, trange, zrange)
 
         # set seed for consistency
         np.random.seed(8)
@@ -186,7 +148,7 @@ class AlphaLosses(Optimizable):
         print("tracing particles")
 
         # trace on GPU
-        last_time = sopp.gpu_tracing(
+        last_time = firm3dpp.boozer_gpu_tracing(
             quad_pts=quad_info,
             srange=srange,
             trange=trange,
@@ -198,27 +160,25 @@ class AlphaLosses(Optimizable):
             vtang=vpar_inits,
             tmax=self.t_max,
             tol=1e-9,
-            psi0=psi0,
+            psi0=field.psi0,
             nparticles=self.n_particles,
         )
 
-        last_time = np.reshape(last_time, (self.n_particles, 7))
-
+        last_time = np.reshape(last_time, (self.n_particles, 5))
         particle_data = pd.DataFrame(
             {
-                "s_start": stz_inits[:, 0],
-                "t_start": stz_inits[:, 1],
-                "z_start": stz_inits[:, 2],
-                "vpar_start": vpar_inits,
-                "s_end": last_time[:, 0],
-                "t_end": last_time[:, 1],
-                "z_end": last_time[:, 2],
-                "vpar_end": last_time[:, 3],
-                "last_time": last_time[:, 4],
-                "steps_accepted": last_time[:, 5],
-                "steps_attempted": last_time[:, 6],
+                's_start': stz_inits[:,0],
+                't_start': stz_inits[:,1],
+                'z_start':stz_inits[:,2],
+                'vpar_start':vpar_inits,
+		's_end': last_time[:,1],
+                't_end':last_time[:,2],
+                'z_end':last_time[:,3],
+                'vpar_end':last_time[:,3],
+                'last_time':last_time[:,0],
             }
         )
+
         particle_data.to_csv("particle_data.csv")
 
 
@@ -247,38 +207,32 @@ def compute_alpha_loss(wout_filename, mbooz=12, nbooz=12, n_particles=25000, t_m
     # equil.read_boozmn("../boozmn_QH_boots.nc")
     # nfp = equil.nfp
     # N = -4
-    N = None
 
     order = 3
     # N = None
     # bri = BoozerRadialInterpolant(equil, order, no_K=True, N=N)
     t1 = time.time()
-    bri = BoozerRadialInterpolant(wout_filename, order, mpol=mbooz, ntor=nbooz, no_K=True, write_boozmn=False, verbose=0, N=N)
+    bri = BoozerRadialInterpolant(wout_filename, order, mpol=mbooz, ntor=nbooz, no_K=True, write_boozmn=False, verbose=0)
     # bri = BoozerRadialInterpolant(equil, order, mpol=mbooz, ntor=nbooz, no_K=True, write_boozmn=False, verbose=1, N=N)
     print(f"Time to initialize BoozerRadialInterpolant: {time.time()-t1:.3f} s", flush=True)
 
     degree = 3
-    srange = (0, 1, 15)
-    thetarange = (0, np.pi, 15)
-    zetarange = (0, 2 * np.pi / nfp, 15)
+    n_metagrid_pts = 15
     t1 = time.time()
     field = InterpolatedBoozerField(
-        bri, degree, srange, thetarange, zetarange, True, nfp=nfp, stellsym=True
+        bri,
+        degree,
+        ns_interp=n_metagrid_pts,
+        ntheta_interp=n_metagrid_pts,
+        nzeta_interp=n_metagrid_pts,
     )
     print(f"Time to initialize InterpolatedBoozerField: {time.time()-t1:.3f} s", flush=True)
+    t2 = time.time()
+    srange, trange, zrange, quad_info, maxJ = boozer_interpolant(field, nfp, n_metagrid_pts)
+    print(f"Time for boozer_interpolant(): {time.time()-t2:.3f} s", flush=True)
 
     # Evaluate error in interpolation
     print("Error in |B| interpolation", field.estimate_error_modB(1000), flush=True)
-
-    # generate grid with 15 simsopt grid pts
-    n_grid_pts = 15
-    srange = (0, 1, 3 * n_grid_pts + 1)
-    trange = (0, np.pi, 3 * n_grid_pts + 1)
-    zrange = (0, 2 * np.pi / nfp, 3 * n_grid_pts + 1)
-    print("About to call gen_bfield_info")
-    t1 = time.time()
-    quad_info, maxJ, psi0 = gen_bfield_info(field, srange, trange, zrange)
-    print(f"Time to call gen_bfield_info: {time.time()-t1:.3f} s", flush=True)
 
     # set seed for consistency
     np.random.seed(8)
@@ -291,7 +245,7 @@ def compute_alpha_loss(wout_filename, mbooz=12, nbooz=12, n_particles=25000, t_m
     print("tracing particles", flush=True)
 
     # trace on GPU
-    last_time = sopp.gpu_tracing(
+    last_time = firm3dpp.boozer_gpu_tracing(
         quad_pts=quad_info,
         srange=srange,
         trange=trange,
@@ -303,29 +257,25 @@ def compute_alpha_loss(wout_filename, mbooz=12, nbooz=12, n_particles=25000, t_m
         vtang=vpar_inits,
         tmax=t_max,
         tol=1e-9,
-        psi0=psi0,
+        psi0=field.psi0,
         nparticles=n_particles,
     )
 
-    last_time = np.reshape(last_time, (n_particles, 7))
-
+    last_time = np.reshape(last_time, (n_particles, 5))
     particle_data = pd.DataFrame(
         {
-            "s_start": stz_inits[:, 0],
-            "t_start": stz_inits[:, 1],
-            "z_start": stz_inits[:, 2],
-            "vpar_start": vpar_inits,
-            "s_end": last_time[:, 0],
-            "t_end": last_time[:, 1],
-            "z_end": last_time[:, 2],
-            "vpar_end": last_time[:, 3],
-            "last_time": last_time[:, 4],
-            "steps_accepted": last_time[:, 5],
-            "steps_attempted": last_time[:, 6],
+            's_start': stz_inits[:,0],
+            't_start': stz_inits[:,1],
+            'z_start':stz_inits[:,2],
+            'vpar_start':vpar_inits,
+            's_end': last_time[:,1],
+            't_end':last_time[:,2],
+            'z_end':last_time[:,3],
+            'vpar_end':last_time[:,3],
+            'last_time':last_time[:,0],
         }
     )
     particle_data.to_csv("particle_data.csv")
-
 
     did_leave = [t < t_max for t in particle_data["last_time"]]
     loss_frac = sum(did_leave) / len(did_leave)
