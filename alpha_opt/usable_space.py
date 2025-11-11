@@ -1,10 +1,13 @@
 import os
 import time
 import numpy as np
-from sklearn.preprocessing import QuantileTransformer, RobustScaler
+from sklearn.preprocessing import QuantileTransformer, RobustScaler, FunctionTransformer
 from simsopt._core import ObjectiveFailure
 from vmecpp.simsopt_compat import Vmec
-from alpha_opt import PCASurface, DATA_DIR
+
+from . import DATA_DIR
+from .pca import PCASurface
+from .constants import ARIES_CS_MINOR_RADIUS
 
 # Check if mpi4py is available
 try:
@@ -27,6 +30,7 @@ def measure_usable_space_pca(
     x_max=2,
     minutes=0.3,
     iota_threshold=0.2,
+    print_every=10,
     transform1=QuantileTransformer(),
     transform2=RobustScaler(),
 ):
@@ -37,6 +41,8 @@ def measure_usable_space_pca(
 
     If mpi4py is installed, this function will use MPI to run multiple
     processes in parallel.
+
+    You can set transform1=None to skip the first transformation.
 
     Parameters
     ----------
@@ -52,6 +58,8 @@ def measure_usable_space_pca(
         Number of minutes to run the test.
     iota_threshold : float
         Threshold for considering iota to be "good".
+    print_every : int
+        Print status every this many trials.
     transform1 : sklearn transformer
         First transformer, to apply before PCA.
     transform2 : sklearn transformer
@@ -70,8 +78,11 @@ def measure_usable_space_pca(
     good_iota_fraction : float
         Fraction of trials with good iota.
     """
-    minor_radius = 1.0
+    minor_radius = ARIES_CS_MINOR_RADIUS
     major_radius = minor_radius * aspect_ratio
+
+    if transform1 is None:
+        transform1 = FunctionTransformer()
 
     # Set different random seed for each MPI process
     np.random.seed(rank)
@@ -119,7 +130,7 @@ def measure_usable_space_pca(
 
         n_trials += 1
 
-        if n_trials % 2 == 0:
+        if n_trials % print_every == 0:
             print_status()
 
     print_status()

@@ -18,6 +18,8 @@ pca_data_file = os.path.abspath(
 class PCASurface(Surface):
     """A Surface where the dofs are the amplitudes of principal components from
     a set of familiar stellarator shapes.
+
+    You can set transform1=None to skip the first transformation.
     """
     def __init__(
             self, 
@@ -50,6 +52,9 @@ class PCASurface(Surface):
         data = np.loadtxt(filename, skiprows=1)
 
         print(f"Data shape: {data.shape}")
+
+        if transform1 is None:
+            transform1 = FunctionTransformer()  # The identity transform
 
         # Set up a pipeline with Transformer followed by PCA
         self.pipeline = Pipeline([
