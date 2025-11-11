@@ -6,7 +6,7 @@ from simsopt._core import ObjectiveFailure
 from vmecpp.simsopt_compat import Vmec
 
 from . import DATA_DIR
-from .pca import PCASurface
+from .pca import SurfacePCAGarabedian, SurfacePCARealSpace
 from .constants import ARIES_CS_MINOR_RADIUS
 
 # Check if mpi4py is available
@@ -34,6 +34,7 @@ def measure_usable_space_pca(
     vmec_input="vacuum",
     transform1=QuantileTransformer(),
     transform2=RobustScaler(),
+    space="Garabedian",
 ):
     """Measure the fraction of parameter space in which vmec converges, using a
     PCA surface.
@@ -47,6 +48,9 @@ def measure_usable_space_pca(
 
     You can set vmec_input="vacuum" or "finite beta" to use the default vacuum
     and finite-beta vmec input files included with alpha_opt.
+
+    The argument `space` can be either "Garabedian" or "RealSpace" to choose
+    between SurfacePCAGarabedian and SurfacePCARealSpace.
 
     Parameters
     ----------
@@ -68,6 +72,8 @@ def measure_usable_space_pca(
         First transformer, to apply before PCA.
     transform2 : sklearn transformer
         Second transformer, to apply after PCA.
+    space : str
+        The type of PCA space to use ("Garabedian" or "RealSpace").
 
     Returns
     -------
@@ -93,14 +99,27 @@ def measure_usable_space_pca(
 
     start_time = time.time()
 
-    surf = PCASurface(
-        nfp,
-        major_radius,
-        minor_radius,
-        n_dimensions,
-        transform1=transform1,
-        transform2=transform2,
-    )
+    if space == "Garabedian":
+        surf = SurfacePCAGarabedian(
+            nfp,
+            major_radius,
+            minor_radius,
+            n_dimensions,
+            transform1=transform1,
+            transform2=transform2,
+        )
+    elif space == "RealSpace":
+        surf = SurfacePCARealSpace(
+            nfp,
+            major_radius,
+            minor_radius,
+            n_dimensions,
+            transform1=transform1,
+            transform2=transform2,
+        )
+    else:
+        raise ValueError(f"Unknown space type: {space}")
+    
     if vmec_input == "vacuum":
         vmec_input = os.path.join(DATA_DIR, "input.vmec")
     elif vmec_input == "finite beta":
