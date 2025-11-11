@@ -4,9 +4,9 @@ from sklearn import pipeline
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer, RobustScaler, FunctionTransformer
 from sklearn.decomposition import PCA
-from simsopt.geo import SurfaceGarabedian, Surface
+from simsopt.geo import SurfaceGarabedian, SurfaceRZFourier, Surface
 
-pca_data_file = os.path.abspath(
+pca_Garabedian_data_file = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
         "..",
@@ -14,10 +14,20 @@ pca_data_file = os.path.abspath(
         "20251014-01-get_bounds_on_Garabedian_Deltas_PCA_inputs_5x5_withoutNfp123QIs.dat",
     )
 )
+pca_real_space_data_file = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "data",
+        "20251111-01_save_pca_shape_data_real_space_PCA_inputs.dat",
+    )
+)
 
-class PCASurface(Surface):
+class SurfacePCAGarabedian(Surface):
     """A Surface where the dofs are the amplitudes of principal components from
     a set of familiar stellarator shapes.
+
+    The PCA is applied to Garabedian coefficients.
 
     You can set transform1=None to skip the first transformation.
     """
@@ -27,7 +37,7 @@ class PCASurface(Surface):
             major_radius,
             minor_radius,
             dimension,
-            filename=pca_data_file,
+            filename=pca_Garabedian_data_file,
             transform1=QuantileTransformer(),
             transform2=RobustScaler(),
         ):
@@ -116,3 +126,88 @@ class PCASurface(Surface):
 
     def to_RZFourier(self):
         return self.surface_rz_fourier
+
+class SurfacePCARealSpace(Surface):
+    """A Surface where the dofs are the amplitudes of principal components from
+    a set of familiar stellarator shapes.
+
+    The PCA is applied to (R, Z) values.
+
+    You can set transform1=None to skip the first transformation.
+    """
+    def __init__(
+            self, 
+            nfp,
+            major_radius,
+            minor_radius,
+            dimension,
+            filename=pca_real_space_data_file,
+            transform1=None,
+            transform2=RobustScaler(),
+            mpol=6,
+            ntor=6,
+        ):
+        self.major_radius = major_radius
+        self.minor_radius = minor_radius
+        self.nfp = nfp
+        self.dimension = dimension
+
+        # Load the data (skip header row)
+        data = np.loadtxt(filename)
+        # n_theta and n_phi must match those used when generating the data
+        self.n_theta = 32
+        self.n_phi = 33
+
+        print(f"Data shape: {data.shape}")
+        assert data.shape[1] == self.n_theta * self.n_phi * 2
+
+        if transform1 is None:
+            transform1 = FunctionTransformer()  # The identity transform
+
+        # Set up a pipeline with Transformer followed by PCA
+        self.pipeline = Pipeline([
+            # ('transform', FunctionTransformer()),  # The identity transform
+            # ('transform', RobustScaler()),
+            ('transform', transform1),
+            # ('transform', QuantileTransformer(output_distribution='normal')),
+            ('pca', PCA()),
+            ('transform2', transform2),
+            # ('transform2', QuantileTransformer()),
+        ])
+
+        # Fit the pipeline to the data
+        self.pipeline.fit(data)
+
+        # Get the number of principal components
+        self.n_components = self.pipeline.named_steps['pca'].n_components_
+        print(f"Number of principal components: {self.n_components}")
+
+        self.surface = SurfaceRZFourier.from_nphi_ntheta(
+            nfp=nfp,
+            mpol=mpol,
+            ntor=ntor,
+            range="half period",
+            ntheta=self.n_theta,
+            nphi=self.n_phi,
+        )
+
+        x0 = np.zeros(self.n_components)
+        fixed = np.full(self.n_components, True)
+        fixed[:self.dimension] = False  # Unfix the first 'dimension' components
+        super().__init__(x0=x0, fixed=fixed)
+
+    def recompute_bell(self, parent=None):
+        # Transform back to original space
+        PCA_space = self.pipeline.named_steps['transform2'].inverse_transform(self.local_full_x.reshape(1, -1))
+        quantile_space = self.pipeline.named_steps['pca'].inverse_transform(PCA_space)
+        original_space = self.pipeline.named_steps['transform'].inverse_transform(quantile_space)
+
+        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self.minor_radius + self.major_radius
+        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self.minor_radius
+        X = R * np.cos(2 * np.pi * self.surface.quadpoints_phi[:, None])
+        Y = R * np.sin(2 * np.pi * self.surface.quadpoints_phi[:, None])
+        gamma = np.concatenate((X[:, :, None], Y[:, :, None], Z[:, :, None]), axis=2)
+        self.surface.least_squares_fit(gamma)
+
+    def to_RZFourier(self):
+        return self.surface
