@@ -31,6 +31,7 @@ def measure_usable_space_pca(
     minutes=0.3,
     iota_threshold=0.2,
     print_every=10,
+    vmec_input="vacuum",
     transform1=QuantileTransformer(),
     transform2=RobustScaler(),
 ):
@@ -43,6 +44,9 @@ def measure_usable_space_pca(
     processes in parallel.
 
     You can set transform1=None to skip the first transformation.
+
+    You can set vmec_input="vacuum" or "finite beta" to use the default vacuum
+    and finite-beta vmec input files included with alpha_opt.
 
     Parameters
     ----------
@@ -97,7 +101,12 @@ def measure_usable_space_pca(
         transform1=transform1,
         transform2=transform2,
     )
-    vmec = Vmec(os.path.join(DATA_DIR, "input.vmec"), verbose=False)
+    if vmec_input == "vacuum":
+        vmec_input = os.path.join(DATA_DIR, "input.vmec")
+    elif vmec_input == "finite beta":
+        vmec_input = os.path.join(DATA_DIR, "input.finite_beta")
+
+    vmec = Vmec(vmec_input, verbose=False)
     vmec.boundary = surf
     vmec.indata.nfp = (
         nfp  # Vmec++ does not automatically get nfp from the boundary surface!
