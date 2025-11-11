@@ -96,3 +96,29 @@ def test_surface_pca_real_space_regression():
     reference_data[0] = major_radius
     np.testing.assert_allclose(surf3.x, reference_data, atol=1e-14)
 
+def test_surface_pca_real_space_with_vmec():
+    vmec = Vmec(os.path.join(DATA_DIR, "input.vmec"))
+
+    nfp = 3
+    major_radius = 2.3
+    minor_radius = 0.5
+    dimension = 10
+
+    pca_surface = SurfacePCARealSpace(
+        nfp=nfp,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        dimension=dimension,
+    )
+    vmec.boundary = pca_surface
+    vmec.indata.nfp = nfp  # Vmec++ does not automatically get nfp from the boundary surface!
+
+    vmec.run()
+    # vmec.wout.save("wout_test_surface_pca_real_space_with_vmec.nc")
+    np.testing.assert_equal(vmec.wout.nfp, nfp)
+    np.testing.assert_allclose(vmec.wout.Rmajor_p, major_radius, rtol=0.005)
+    np.testing.assert_allclose(vmec.wout.Aminor_p, minor_radius, rtol=0.005)
+    print("iota:", list(vmec.wout.iotaf))
+    np.testing.assert_allclose(vmec.wout.iotaf[0], 0.54169385996005)
+    np.testing.assert_allclose(vmec.wout.iotaf[-1], 0.5842204609714623)
+    

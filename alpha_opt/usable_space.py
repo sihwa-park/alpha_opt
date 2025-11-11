@@ -6,7 +6,7 @@ from simsopt._core import ObjectiveFailure
 from vmecpp.simsopt_compat import Vmec
 
 from . import DATA_DIR
-from .pca import PCASurface
+from .pca import SurfacePCAGarabedian
 from .constants import ARIES_CS_MINOR_RADIUS
 
 # Check if mpi4py is available
@@ -93,7 +93,7 @@ def measure_usable_space_pca(
 
     start_time = time.time()
 
-    surf = PCASurface(
+    surf = SurfacePCAGarabedian(
         nfp,
         major_radius,
         minor_radius,
