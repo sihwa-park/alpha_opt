@@ -216,6 +216,7 @@ def compute_alpha_loss(
     min_dt=1e-10,
     maxloss=10.0,
     t_block=1e-4,
+    tol=1e-9,
 ):
     """
     If maxloss is >= 1, this function returns the energy loss fraction at t_max.
@@ -299,7 +300,7 @@ def compute_alpha_loss(
         vtotal=ALPHA_BIRTH_SPEED,
         vtang=vpar_inits,
         tmax=t_max,
-        tol=1e-9,
+        tol=tol,
         psi0=field.psi0,
         nparticles=n_particles,
         min_dt=min_dt,

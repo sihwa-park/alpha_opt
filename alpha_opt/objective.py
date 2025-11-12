@@ -1,8 +1,10 @@
+import time
 from simsopt._core import ObjectiveFailure
 
 def get_objective(vmec, surface, x_scale, raw_objective, fail_val=1000.0, save_convergence_history=True):
 
     def objective(x):
+        start_time = time.time()
         surface.x = x * x_scale
         surface2 = surface.to_RZFourier()
         # surface2.plot()
@@ -67,6 +69,7 @@ def get_objective(vmec, surface, x_scale, raw_objective, fail_val=1000.0, save_c
             f_out.write(f"x = {[float(xj) for xj in x]}\n")
             f_out.write(f"f = {f}\n")
             f_out.write(f"failed: {failure}\n")
+            f_out.write(f"time: {time.time() - start_time}\n")
 
         return f
 
