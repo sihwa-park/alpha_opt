@@ -31,6 +31,7 @@ else:
     )
     from firm3d.util.gpu_utils import boozer_interpolant
     import firm3dpp
+
     # from firm3d.util.sampling import sample_stz
 
 from .profiles import sample_alpha_birth_s
@@ -67,40 +68,22 @@ def sample_tz(s, J_max, field):
 
 # Sample s,t,z
 def sample_stz(field, J_max):
-   s = sample_alpha_birth_s()
-   theta, zeta = sample_tz(s, J_max, field)
-   return np.array([s, theta, zeta])
+    s = sample_alpha_birth_s()
+    theta, zeta = sample_tz(s, J_max, field)
+    return np.array([s, theta, zeta])
 
 
-def compute_alpha_loss(
+def generate_interpolant_and_initial_conditions(
     wout_filename,
     mbooz=12,
     nbooz=12,
-    n_particles=25000,
-    t_max=1e-2,
-    tau=1e-1,
-    min_dt=1e-10,
-    maxloss=10.0,
-    t_block=1e-4,
-    tol=1e-9,
+    n_particles=5000,
 ):
     """
-    If maxloss is >= 1, this function returns the energy loss fraction at t_max.
-    If maxloss < 1, it returns the time at which the energy loss fraction exceeds maxloss.
+    Generate initial conditions for alpha particles.
     """
-    print(
-        f"Computing alpha losses with {n_particles} particles, t_max={t_max}, tau={tau}"
-    )
-
     with netcdf_file(wout_filename, "r") as f:
         nfp = int(f.variables["nfp"][()])
-
-    # # Compute VMEC equilibrium
-    # equil = Booz_xform()
-    # equil.verbose = 0
-    # equil.read_boozmn("../boozmn_QH_boots.nc")
-    # nfp = equil.nfp
-    # N = -4
 
     order = 3
     # N = None
@@ -152,6 +135,62 @@ def compute_alpha_loss(
     print("Finished creating stz_inits", flush=True)
     vpar_inits = ALPHA_BIRTH_SPEED * np.random.uniform(low=-1, high=1, size=n_particles)
 
+    return stz_inits, vpar_inits, srange, trange, zrange, quad_info
+
+
+def write_simple_start(
+    wout_filename,
+    mbooz=12,
+    nbooz=12,
+    n_particles=5000,
+):
+    """
+    Write a start.dat file for SIMPLE with particle initial conditions.
+    """
+    stz_inits, vpar_inits, srange, trange, zrange, quad_info = (
+        generate_interpolant_and_initial_conditions(
+            wout_filename,
+            mbooz,
+            nbooz,
+            n_particles,
+        )
+    )
+
+    with open("start.dat", "w") as f:
+        for i in range(n_particles):
+            f.write(
+                f"{stz_inits[i,0]:24.15g} {stz_inits[i,1]:24.15g} {stz_inits[i,2]:24.15g} 1.0 {vpar_inits[i] / ALPHA_BIRTH_SPEED:24.15g}\n"
+            )
+
+
+def compute_alpha_loss(
+    wout_filename,
+    mbooz=12,
+    nbooz=12,
+    n_particles=25000,
+    t_max=1e-2,
+    tau=1e-1,
+    min_dt=1e-10,
+    maxloss=10.0,
+    t_block=1e-4,
+    tol=1e-9,
+):
+    """
+    If maxloss is >= 1, this function returns the energy loss fraction at t_max.
+    If maxloss < 1, it returns the time at which the energy loss fraction exceeds maxloss.
+    """
+    print(
+        f"Computing alpha losses with {n_particles} particles, t_max={t_max}, tau={tau}"
+    )
+
+    stz_inits, vpar_inits, srange, trange, zrange, quad_info = (
+        generate_interpolant_and_initial_conditions(
+            wout_filename,
+            mbooz,
+            nbooz,
+            n_particles,
+        )
+    )
     print("tracing particles", flush=True)
 
     # trace on GPU
