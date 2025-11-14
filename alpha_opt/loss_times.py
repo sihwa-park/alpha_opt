@@ -48,6 +48,9 @@ def alpha_loss_objective_from_times(times, tau, threshold, t_max, epsilon=1.0/25
 
     If threshold is >= 1, simply return the energy loss fraction.
 
+    If threshold < 1, use the more sophisticated objective derived in the note
+    20251112-01 Objective function for alpha particle loss.lyx
+
     The default value for epsilon corresponds to losing one particle out of 25000.
 
     Parameters:
