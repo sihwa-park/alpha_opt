@@ -135,7 +135,7 @@ def generate_interpolant_and_initial_conditions(
     print("Finished creating stz_inits", flush=True)
     vpar_inits = ALPHA_BIRTH_SPEED * np.random.uniform(low=-1, high=1, size=n_particles)
 
-    return stz_inits, vpar_inits, srange, trange, zrange, quad_info
+    return stz_inits, vpar_inits, srange, trange, zrange, quad_info, field
 
 
 def write_simple_start(
@@ -147,7 +147,7 @@ def write_simple_start(
     """
     Write a start.dat file for SIMPLE with particle initial conditions.
     """
-    stz_inits, vpar_inits, srange, trange, zrange, quad_info = (
+    stz_inits, vpar_inits, srange, trange, zrange, quad_info, field = (
         generate_interpolant_and_initial_conditions(
             wout_filename,
             mbooz,
@@ -183,7 +183,7 @@ def compute_alpha_loss(
         f"Computing alpha losses with {n_particles} particles, t_max={t_max}, tau={tau}"
     )
 
-    stz_inits, vpar_inits, srange, trange, zrange, quad_info = (
+    stz_inits, vpar_inits, srange, trange, zrange, quad_info, field = (
         generate_interpolant_and_initial_conditions(
             wout_filename,
             mbooz,
