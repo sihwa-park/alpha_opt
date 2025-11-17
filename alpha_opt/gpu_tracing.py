@@ -30,6 +30,7 @@ else:
         InterpolatedBoozerField,
     )
     from firm3d.util.gpu_utils import boozer_interpolant
+    from firm3d.util.sampling import sample_stz as firm3d_sample_stz
     import firm3dpp
 
     # from firm3d.util.sampling import sample_stz
@@ -78,9 +79,15 @@ def generate_interpolant_and_initial_conditions(
     mbooz=12,
     nbooz=12,
     n_particles=5000,
+    vacuum=False,
+    firm3d_profiles=False,
 ):
     """
     Generate initial conditions for alpha particles.
+
+    If firm3d_profiles is True, use firm3d's sampling function for s.
+    If False, use alpha_opt's sampling function for s, which assumes different
+    density and temperature profiles.
     """
     with netcdf_file(wout_filename, "r") as f:
         nfp = int(f.variables["nfp"][()])
@@ -94,7 +101,7 @@ def generate_interpolant_and_initial_conditions(
         order,
         mpol=mbooz,
         ntor=nbooz,
-        no_K=True,
+        no_K=vacuum,
         write_boozmn=False,
         verbose=0,
     )
@@ -120,7 +127,7 @@ def generate_interpolant_and_initial_conditions(
     )
     t2 = time.time()
     srange, trange, zrange, quad_info, maxJ = boozer_interpolant(
-        field, nfp, n_metagrid_pts
+        field, nfp, n_metagrid_pts, vacuum=vacuum
     )
     print(f"Time for boozer_interpolant(): {time.time()-t2:.3f} s", flush=True)
 
@@ -131,7 +138,11 @@ def generate_interpolant_and_initial_conditions(
     np.random.seed(8)
 
     print("About to create stz_inits. maxJ=", maxJ)
-    stz_inits = np.vstack([sample_stz(field, maxJ) for i in range(n_particles)])
+    if firm3d_profiles:
+        sample_func = firm3d_sample_stz
+    else:
+        sample_func = sample_stz
+    stz_inits = np.vstack([sample_func(field, maxJ) for i in range(n_particles)])
     print("Finished creating stz_inits", flush=True)
     vpar_inits = ALPHA_BIRTH_SPEED * np.random.uniform(low=-1, high=1, size=n_particles)
 
@@ -143,6 +154,8 @@ def write_simple_start(
     mbooz=12,
     nbooz=12,
     n_particles=5000,
+    vacuum=False,
+    firm3d_profiles=False,
 ):
     """
     Write a start.dat file for SIMPLE with particle initial conditions.
@@ -153,6 +166,8 @@ def write_simple_start(
             mbooz,
             nbooz,
             n_particles,
+            vacuum,
+            firm3d_profiles,
         )
     )
 
@@ -174,6 +189,8 @@ def compute_alpha_loss(
     maxloss=10.0,
     t_block=1e-4,
     tol=1e-9,
+    vacuum=False,
+    firm3d_profiles=False,
 ):
     """
     If maxloss is >= 1, this function returns the energy loss fraction at t_max.
@@ -189,6 +206,8 @@ def compute_alpha_loss(
             mbooz,
             nbooz,
             n_particles,
+            vacuum,
+            firm3d_profiles,
         )
     )
     print("tracing particles", flush=True)
@@ -208,9 +227,10 @@ def compute_alpha_loss(
         tol=tol,
         psi0=field.psi0,
         nparticles=n_particles,
-        min_dt=min_dt,
-        maxloss=maxloss,
-        t_block=t_block,
+        # min_dt=min_dt,
+        # maxloss=maxloss,
+        # t_block=t_block,
+        vacuum=vacuum,
     )
 
     last_time = np.reshape(last_time, (n_particles, -1))
