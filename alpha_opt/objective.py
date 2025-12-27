@@ -20,12 +20,19 @@ def get_objective(
     save_convergence_history=True,
     max_B=12.0,
     max_B_iterations=0,
+    phiedge=None,
 ):
     """
     If max_B_iterations is 0, the field strength will be controlled by the
     original value of phiedge, and max_B is not used. If max_B_iterations is >0,
     vmec will be run that many additional times with phiedge varied each time to try to
     match the target max_B.
+
+    if phiedge is None, the previous value of phiedge will be used for the first
+    vmec calculation. Otherwise, phiedge will be set to the provided value before the
+    first vmec calculation. Setting phiedge is useful when doing finite
+    differences to ensure that the objective is independent of the history of
+    past evaluations.
     """
     def objective(x):
         start_time = time.time()
@@ -42,6 +49,9 @@ def get_objective(
             f_out.write("\n")
             for name, value in zip(surface2.local_dof_names, surface2.x):
                 f_out.write(f"{name:9}: {value}\n")
+
+        if phiedge is not None:
+            vmec.set('phiedge', phiedge)
 
         # This next line will be unnecessary once my PR to vmecpp is merged.
         surface2.change_resolution(vmec.indata.mpol, vmec.indata.ntor)
