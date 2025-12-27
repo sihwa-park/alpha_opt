@@ -227,9 +227,9 @@ def compute_alpha_loss(
         tol=tol,
         psi0=field.psi0,
         nparticles=n_particles,
-        # min_dt=min_dt,
-        # maxloss=maxloss,
-        # t_block=t_block,
+        min_dt=min_dt,
+        maxloss=maxloss,
+        t_block=t_block,
         vacuum=vacuum,
     )
 

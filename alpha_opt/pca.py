@@ -152,6 +152,15 @@ class SurfacePCARealSpace(Surface):
         self.nfp = nfp
         self.dimension = dimension
 
+        if isinstance(transform2, QuantileTransformer):
+            # If transform2 gives results on [0, 1]:
+            self.default_amplitude = 0.5
+        else:
+            # If transform2 gives results with mean 0:
+            self.default_amplitude = 0.0
+
+        print("Default amplitude for PCA surface:", self.default_amplitude)
+
         # Load the data (skip header row)
         data = np.loadtxt(filename)
         # n_theta and n_phi must match those used when generating the data
@@ -191,7 +200,7 @@ class SurfacePCARealSpace(Surface):
             nphi=self.n_phi,
         )
 
-        x0 = np.zeros(self.n_components)
+        x0 = np.zeros(self.n_components) + self.default_amplitude
         fixed = np.full(self.n_components, True)
         fixed[:self.dimension] = False  # Unfix the first 'dimension' components
         super().__init__(x0=x0, fixed=fixed)
@@ -210,4 +219,6 @@ class SurfacePCARealSpace(Surface):
         self.surface.least_squares_fit(gamma)
 
     def to_RZFourier(self):
-        return self.surface
+        # Return a copy of the surface rather than the original surface so that
+        # if e.g. change_resolution() is called, it doesn't break the internal state.
+        return self.surface.copy()
