@@ -65,6 +65,7 @@ def get_objective(
         vmec.wout = None  # Clear out old wout data, if any.
 
         # original_stdout_fd = os.dup(sys.stdout.fileno())
+        vmec_start_time = time.time()
         try:
             # Redirect stdout to a file
             # with open('output.txt', 'w') as output_file:
@@ -85,10 +86,14 @@ def get_objective(
             # Some large value:
             failure = True
 
+        print("Time to run vmec:", time.time() - vmec_start_time)
+
         if failure:
             f = fail_val
         else:
+            raw_objective_start_time = time.time()
             f = raw_objective()
+            print("Time to call raw_objective:", time.time() - raw_objective_start_time)
 
         if False:
             # Write force residual history to HDF5 file

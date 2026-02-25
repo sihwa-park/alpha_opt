@@ -89,6 +89,8 @@ def generate_interpolant_and_initial_conditions(
     If False, use alpha_opt's sampling function for s, which assumes different
     density and temperature profiles.
     """
+    start_time = time.time()
+    
     with netcdf_file(wout_filename, "r") as f:
         nfp = int(f.variables["nfp"][()])
 
@@ -138,14 +140,16 @@ def generate_interpolant_and_initial_conditions(
     np.random.seed(8)
 
     print("About to create stz_inits. maxJ=", maxJ)
+    t3 = time.time()
     if firm3d_profiles:
         sample_func = firm3d_sample_stz
     else:
         sample_func = sample_stz
     stz_inits = np.vstack([sample_func(field, maxJ) for i in range(n_particles)])
-    print("Finished creating stz_inits", flush=True)
+    print(f"Finished creating stz_inits. Took {time.time()-t3:.3f} s", flush=True)
     vpar_inits = ALPHA_BIRTH_SPEED * np.random.uniform(low=-1, high=1, size=n_particles)
 
+    print("Total time in generate_interpolant_and_initial_conditions:", time.time() - start_time)
     return stz_inits, vpar_inits, srange, trange, zrange, quad_info, field
 
 
@@ -213,6 +217,7 @@ def compute_alpha_loss(
     print("tracing particles", flush=True)
 
     # trace on GPU
+    start_time = time.time()
     last_time = firm3dpp.boozer_gpu_tracing(
         quad_pts=quad_info,
         srange=srange,
@@ -232,7 +237,9 @@ def compute_alpha_loss(
         t_block=t_block,
         vacuum=vacuum,
     )
+    print("Time to call firm3dpp.boozer_gpu_tracing:", time.time() - start_time)
 
+    t1 = time.time()
     last_time = np.reshape(last_time, (n_particles, -1))
     particle_data = pd.DataFrame(
         {
@@ -247,7 +254,10 @@ def compute_alpha_loss(
             "last_time": last_time[:, 0],
         }
     )
+    print("Time to create DataFrame with particle results:", time.time() - t1)
+    t2 = time.time()
     particle_data.to_csv("particle_data.csv")
+    print("Time to save particle_data.csv:", time.time() - t2)
 
     return alpha_loss_objective_from_times(
         particle_data["last_time"], tau, maxloss, t_max
