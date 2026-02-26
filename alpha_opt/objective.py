@@ -54,7 +54,11 @@ def get_objective(
             vmec.set('phiedge', phiedge)
 
         # This next line will be unnecessary once my PR to vmecpp is merged.
-        surface2.change_resolution(vmec.indata.mpol, vmec.indata.ntor)
+        # Handle the changed API for change_resolution
+        new_surf = surface2.change_resolution(vmec.indata.mpol, vmec.indata.ntor)
+        if new_surf is not None:
+            surface2 = new_surf
+            
         vmec.boundary = surface2
         vmec.set_indata()
         indata_json = vmec.indata.model_dump_json(indent=2)
