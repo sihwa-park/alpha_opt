@@ -4,6 +4,7 @@ from alpha_opt.usable_space import measure_usable_space_pca
 
 def test_usable_space_pca():
     for space in ["Garabedian", "RealSpace"]:
+        print(f"Testing space: {space}")
         n_trials, n_successes, n_good_iota, success_fraction, n_good_iota_fraction = (
             measure_usable_space_pca(
                 minutes=0.1,
