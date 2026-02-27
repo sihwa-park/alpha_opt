@@ -7,3 +7,5 @@ vmecpp
 nlopt
 scikit-learn
 pytest
+git+https://github.com/byoungj/weightedpca@quantiles#egg=weightedpca
+h5py

@@ -9,5 +9,5 @@ from .loss_times import (
     alpha_loss_objective_from_times
 )
 from .mercier import get_DMerc_normalized, get_worst_DMerc_normalized
-from .pca import SurfacePCAGarabedian, SurfacePCARealSpace
+from .pca import SurfacePCAGarabedian, SurfacePCARealSpace, SurfaceWeightedPCA
 from .surface import init_optimizable_surface

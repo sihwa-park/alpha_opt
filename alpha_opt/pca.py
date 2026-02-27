@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from sklearn import pipeline
+import h5py
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer, RobustScaler, FunctionTransformer
 from sklearn.decomposition import PCA
@@ -20,6 +20,15 @@ pca_real_space_data_file = os.path.abspath(
         "..",
         "data",
         "20251111-01_save_pca_shape_data_real_space_PCA_inputs.dat",
+    )
+)
+
+weighted_pca_data_file = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "data",
+        "20260226-05_weighted_PCA_data.h5",
     )
 )
 
@@ -210,6 +219,86 @@ class SurfacePCARealSpace(Surface):
         PCA_space = self.pipeline.named_steps['transform2'].inverse_transform(self.local_full_x.reshape(1, -1))
         quantile_space = self.pipeline.named_steps['pca'].inverse_transform(PCA_space)
         original_space = self.pipeline.named_steps['transform'].inverse_transform(quantile_space)
+
+        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self.minor_radius + self.major_radius
+        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self.minor_radius
+        X = R * np.cos(2 * np.pi * self.surface.quadpoints_phi[:, None])
+        Y = R * np.sin(2 * np.pi * self.surface.quadpoints_phi[:, None])
+        gamma = np.concatenate((X[:, :, None], Y[:, :, None], Z[:, :, None]), axis=2)
+        self.surface.least_squares_fit(gamma)
+
+    def to_RZFourier(self):
+        # Return a copy of the surface rather than the original surface so that
+        # if e.g. change_resolution() is called, it doesn't break the internal state.
+        return self.surface.copy()
+
+class SurfaceWeightedPCA(Surface):
+    """A Surface where the dofs are the amplitudes of principal components from
+    a set of familiar stellarator shapes.
+
+    The PCA is applied to (R, Z) values.
+
+    You can set transform1=None to skip the first transformation.
+    """
+    def __init__(
+            self, 
+            nfp,
+            major_radius,
+            minor_radius,
+            dimension,
+            filename=weighted_pca_data_file,
+            mpol=6,
+            ntor=6,
+        ):
+        self.major_radius = major_radius
+        self.minor_radius = minor_radius
+        self.nfp = nfp
+        self.dimension = dimension
+
+        with h5py.File(filename) as f:
+            self.n_theta = f['n_theta'][()]
+            self.n_phi = f['n_phi'][()]
+            weights = f['weights'][()]
+            data = f['data'][()]
+
+        print(f"Data shape: {data.shape}")
+        assert data.shape[1] == self.n_theta * self.n_phi * 2
+
+        from weightedpca import WeightedPCA, WeightedQuantileTransformer
+
+        # If more singular values than "dimension" are kept, their values will
+        # not be set to 0, but rather they will be set to the median value of
+        # the PCA coefficients in the dataset due to the quantile transformation.
+        self.pca = WeightedPCA(dimension)
+        # self.pca = WeightedPCA()
+        pc_amplitudes = self.pca.fit_transform(data, sample_weight=weights)
+
+        self.quantile_transformer = WeightedQuantileTransformer()
+        self.quantile_transformer.fit(pc_amplitudes, sample_weight=weights)
+
+        # Get the number of principal components
+        self.n_components = self.pca.n_components_
+        print(f"Number of principal components: {self.n_components}")
+
+        self.surface = SurfaceRZFourier.from_nphi_ntheta(
+            nfp=nfp,
+            mpol=mpol,
+            ntor=ntor,
+            range="half period",
+            ntheta=self.n_theta,
+            nphi=self.n_phi,
+        )
+
+        x0 = np.full(self.n_components, 0.5)
+        fixed = np.full(self.n_components, True)
+        fixed[:self.dimension] = False  # Unfix the first 'dimension' components
+        super().__init__(x0=x0, fixed=fixed)
+
+    def recompute_bell(self, parent=None):
+        # Transform back to original space
+        PCA_space = self.quantile_transformer.inverse_transform(self.local_full_x.reshape(1, -1))
+        print("PCA space:", PCA_space)
+        original_space = self.pca.inverse_transform(PCA_space)
 
         R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self.minor_radius + self.major_radius
         Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self.minor_radius
