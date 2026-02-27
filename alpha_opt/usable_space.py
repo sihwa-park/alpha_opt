@@ -148,6 +148,9 @@ def measure_usable_space_pca(
         surf.x = (np.random.rand(n_dimensions) * 2 - 1) * x_max
         try:
             vmec.run()
+            # Temporary workaround until vmecpp bug is fixed (vmecpp replaces
+            # the boundary object when run)
+            vmec.boundary = surf
             n_successes += 1
             iota = abs(vmec.wout.iotaf[-1])
             # print(f"iota: {iota}")
