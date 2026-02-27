@@ -3,7 +3,7 @@ scipy
 pandas
 matplotlib
 simsopt
-vmecpp <= 0.4.11
+vmecpp
 nlopt
 libensemble
 scikit-learn
