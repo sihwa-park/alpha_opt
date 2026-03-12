@@ -53,6 +53,26 @@ def test_surface_Garabedian_quantiles():
     np.testing.assert_equal(len(surface2.x), 5 * 7 - 2)
 
 
+def test_surface_Garabedian_quantiles_regression():
+    """Compare to 20260306-02_weightedQuantile_on_hdf5_Garabedian_interactive.py"""
+    nfp = 3
+    minor_radius = 0.2
+    major_radius = 10.0 * minor_radius
+
+    surface = SurfaceGarabedianQuantiles(
+        nfp=nfp,
+        mpol=1,
+        ntor=1,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+    )
+    reference_x = np.array([-9.58024190e-02, 1.00000000e+00, 1.04883385e-01, 4.40607174e-02,
+                            1.00000000e+01, 7.56137942e-01, -7.48472419e-04, -8.59236577e-02,
+                            -4.71235395e-01])
+
+    np.testing.assert_allclose(surface.surface_garabedian.x, reference_x * minor_radius, rtol=1e-8)
+
+
 def test_surface_Garabedian_quantiles_with_vmec():
     vmec = Vmec(os.path.join(DATA_DIR, "input.vmec"))
 
