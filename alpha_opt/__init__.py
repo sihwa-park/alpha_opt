@@ -10,4 +10,4 @@ from .loss_times import (
 )
 from .mercier import get_DMerc_normalized, get_worst_DMerc_normalized
 from .pca import SurfacePCAGarabedian, SurfacePCARealSpace, SurfaceWeightedPCA
-from .surface import init_optimizable_surface
+from .surface import init_optimizable_surface, SurfaceGarabedianQuantiles
