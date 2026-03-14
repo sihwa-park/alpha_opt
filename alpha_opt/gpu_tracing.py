@@ -73,6 +73,10 @@ def sample_stz(field, J_max):
     theta, zeta = sample_tz(s, J_max, field)
     return np.array([s, theta, zeta])
 
+def sample_stz_s_0p25(field, J_max):
+    s = 0.25
+    theta, zeta = sample_tz(s, J_max, field)
+    return np.array([s, theta, zeta])
 
 def generate_interpolant_and_initial_conditions(
     wout_filename,
@@ -80,13 +84,13 @@ def generate_interpolant_and_initial_conditions(
     nbooz=12,
     n_particles=5000,
     vacuum=False,
-    firm3d_profiles=False,
+    profiles="realistic",
 ):
     """
     Generate initial conditions for alpha particles.
 
-    If firm3d_profiles is True, use firm3d's sampling function for s.
-    If False, use alpha_opt's sampling function for s, which assumes different
+    If profiles is "firm3d", use firm3d's sampling function for s.
+    If profiles is "realistic", use alpha_opt's sampling function for s, which assumes different
     density and temperature profiles.
     """
     start_time = time.time()
@@ -141,10 +145,15 @@ def generate_interpolant_and_initial_conditions(
 
     print("About to create stz_inits. maxJ=", maxJ)
     t3 = time.time()
-    if firm3d_profiles:
+    if profiles == "firm3d":
         sample_func = firm3d_sample_stz
-    else:
+    elif profiles == "realistic":
         sample_func = sample_stz
+    elif profiles == "0.25":
+        sample_func = sample_stz_s_0p25
+    else:
+        raise ValueError(f"Invalid value for profiles: {profiles}")
+    
     stz_inits = np.vstack([sample_func(field, maxJ) for i in range(n_particles)])
     print(f"Finished creating stz_inits. Took {time.time()-t3:.3f} s", flush=True)
     vpar_inits = ALPHA_BIRTH_SPEED * np.random.uniform(low=-1, high=1, size=n_particles)
@@ -159,7 +168,7 @@ def write_simple_start(
     nbooz=12,
     n_particles=5000,
     vacuum=False,
-    firm3d_profiles=False,
+    profiles="realistic",
 ):
     """
     Write a start.dat file for SIMPLE with particle initial conditions.
@@ -171,7 +180,7 @@ def write_simple_start(
             nbooz,
             n_particles,
             vacuum,
-            firm3d_profiles,
+            profiles,
         )
     )
 
@@ -194,7 +203,7 @@ def compute_alpha_loss(
     t_block=1e-4,
     tol=1e-9,
     vacuum=False,
-    firm3d_profiles=False,
+    profiles="realistic",
 ):
     """
     If maxloss is >= 1, this function returns the energy loss fraction at t_max.
@@ -211,7 +220,7 @@ def compute_alpha_loss(
             nbooz,
             n_particles,
             vacuum,
-            firm3d_profiles,
+            profiles,
         )
     )
     print("tracing particles", flush=True)
