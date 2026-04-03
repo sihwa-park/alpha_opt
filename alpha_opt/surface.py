@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import h5py
+from scipy import optimize
 from simsopt.geo import Surface, SurfaceRZFourier, SurfaceGarabedian
 from weightedpca import WeightedQuantileTransformer
 
@@ -109,9 +110,11 @@ class SurfaceGarabedianQuantiles(Surface):
         mpol,
         ntor,
         filename=Garabedian_data_file,
+        exact_radii=False,
     ):
         self._major_radius = major_radius
         self._minor_radius = minor_radius
+        self.exact_radii = exact_radii
         self.nfp = nfp
         self.mpol = mpol
         self.ntor = ntor
@@ -243,6 +246,30 @@ class SurfaceGarabedianQuantiles(Surface):
         for m in range(self.mmin, self.mmax + 1):
             for n in range(self.nmin, self.nmax + 1):
                 self.surface_garabedian.set_Delta(m, n, mode_map[(m, n)])
+
+        if self.exact_radii:
+            # First vary Delta(1,0) to enforce exact aspect ratio. This is a single degree of freedom, so we can do a 1D root solve.
+            target_aspect_ratio = self._major_radius / self._minor_radius
+
+            def aspect_residual(x):
+                self.surface_garabedian.set_Delta(1, 0, x)
+                return (
+                    self.surface_garabedian.to_RZFourier().aspect_ratio()
+                    - target_aspect_ratio
+                )
+
+            try:
+                root = optimize.newton(aspect_residual, x0=self._major_radius)
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    "Failed to enforce exact radii with 1D root solve for Delta(1,0)."
+                ) from exc
+
+            self.surface_garabedian.set_Delta(1, 0, root)
+
+            # Now scale all the Delta(m,n) parameters to match the desired minor radius.
+            scale = self._minor_radius / self.surface_garabedian.to_RZFourier().minor_radius()
+            self.surface_garabedian.x = self.surface_garabedian.x * scale
 
         self.surface_rz_fourier = self.surface_garabedian.to_RZFourier()
 

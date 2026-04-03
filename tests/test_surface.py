@@ -53,6 +53,33 @@ def test_surface_Garabedian_quantiles():
     np.testing.assert_equal(len(surface2.x), 5 * 7 - 2)
 
 
+def test_surface_Garabedian_quantiles_exact_radii():
+    nfp = 3
+    major_radius = 2.3
+    minor_radius = 0.5
+
+    surface = SurfaceGarabedianQuantiles(
+        nfp=nfp,
+        mpol=2,
+        ntor=3,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        exact_radii=True,
+    )
+
+    # Perturb controls so exact_radii enforcement is exercised on recompute.
+    surface.x = np.ones_like(surface.x) * 0.6
+    rz_surface = surface.to_RZFourier()
+    print("Final major radius:", rz_surface.major_radius(), "minor radius:", rz_surface.minor_radius())
+
+    np.testing.assert_allclose(
+        rz_surface.major_radius(), major_radius, atol=1e-10, rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        rz_surface.minor_radius(), minor_radius, atol=1e-10, rtol=1e-12
+    )
+
+
 def test_surface_Garabedian_quantiles_regression():
     """Compare to 20260306-02_weightedQuantile_on_hdf5_Garabedian_interactive.py"""
     nfp = 3
