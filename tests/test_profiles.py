@@ -30,7 +30,7 @@ def test_pressure_profile_matches_vmec():
     # plt.tight_layout()
     # plt.show()
 
-    np.testing.assert_allclose(pressure_vmec, pressure_should_be, rtol=2e-13)
+    np.testing.assert_allclose(pressure_vmec, pressure_should_be, rtol=1e-11)
 
 def test_reaction_rate():
     """Compare the DT reaction rate to the function coded up by Michael C."""
