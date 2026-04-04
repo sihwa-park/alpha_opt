@@ -156,6 +156,47 @@ def test_surface_weighted_pca_regression():
     reference_data[0] = major_radius
     np.testing.assert_allclose(surf3.x, reference_data, atol=1e-14)
 
+def test_surface_weighted_pca_exact_radii():
+    nfp = 3
+    major_radius = 2.3
+    minor_radius = 0.5
+    dimension = 10
+
+    surface = SurfaceWeightedPCA(
+        nfp=nfp,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        dimension=dimension,
+        exact_radii=True,
+    )
+    surface2 = SurfaceWeightedPCA(
+        nfp=nfp,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        dimension=dimension,
+        exact_radii=False,
+    )
+
+    # Perturb controls so exact_radii enforcement is exercised on recompute.
+    surface.x = np.ones_like(surface.x) * 0.6
+    surface2.x = surface.x
+    rz_surface = surface.to_RZFourier()
+    rz_surface2 = surface2.to_RZFourier()
+    print("Final major radius:", rz_surface.major_radius(), "minor radius:", rz_surface.minor_radius())
+
+    np.testing.assert_allclose(
+        rz_surface.major_radius(), major_radius, atol=1e-10, rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        rz_surface.minor_radius(), minor_radius, atol=1e-10, rtol=1e-12
+    )
+    # Surfaces should be identical up to the overall scale and the major radius
+    np.testing.assert_allclose(
+        rz_surface.x[1:] * rz_surface2.minor_radius() / rz_surface.minor_radius(),
+        rz_surface2.x[1:],
+    )
+
+
 def test_surface_weighted_pca_with_vmec():
     vmec = Vmec(os.path.join(DATA_DIR, "input.vmec"))
 

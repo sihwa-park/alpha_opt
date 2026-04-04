@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import h5py
+from scipy import optimize
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer, RobustScaler, FunctionTransformer
 from sklearn.decomposition import PCA
@@ -50,8 +51,8 @@ class SurfacePCAGarabedian(Surface):
             transform1=QuantileTransformer(),
             transform2=RobustScaler(),
         ):
-        self.major_radius = major_radius
-        self.minor_radius = minor_radius
+        self._major_radius = major_radius
+        self._minor_radius = minor_radius
         self.nfp = nfp
         self.dimension = dimension
 
@@ -124,11 +125,11 @@ class SurfacePCAGarabedian(Surface):
         for m in range(self.mmin, self.mmax + 1):
             for n in range(self.nmin, self.nmax + 1):
                 if m == 0 and n == 0:
-                    self.surface_garabedian.set_Delta(m, n, self.minor_radius)
+                    self.surface_garabedian.set_Delta(m, n, self._minor_radius)
                 elif m == 1 and n == 0:
-                    self.surface_garabedian.set_Delta(m, n, self.major_radius)
+                    self.surface_garabedian.set_Delta(m, n, self._major_radius)
                 else:
-                    self.surface_garabedian.set_Delta(m, n, original_space[0, j_col] * self.minor_radius)
+                    self.surface_garabedian.set_Delta(m, n, original_space[0, j_col] * self._minor_radius)
                     j_col += 1
 
         self.surface_rz_fourier = self.surface_garabedian.to_RZFourier()
@@ -156,8 +157,8 @@ class SurfacePCARealSpace(Surface):
             mpol=6,
             ntor=6,
         ):
-        self.major_radius = major_radius
-        self.minor_radius = minor_radius
+        self._major_radius = major_radius
+        self._minor_radius = minor_radius
         self.nfp = nfp
         self.dimension = dimension
 
@@ -220,8 +221,8 @@ class SurfacePCARealSpace(Surface):
         quantile_space = self.pipeline.named_steps['pca'].inverse_transform(PCA_space)
         original_space = self.pipeline.named_steps['transform'].inverse_transform(quantile_space)
 
-        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self.minor_radius + self.major_radius
-        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self.minor_radius
+        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self._minor_radius + self._major_radius
+        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self._minor_radius
         X = R * np.cos(2 * np.pi * self.surface.quadpoints_phi[:, None])
         Y = R * np.sin(2 * np.pi * self.surface.quadpoints_phi[:, None])
         gamma = np.concatenate((X[:, :, None], Y[:, :, None], Z[:, :, None]), axis=2)
@@ -249,11 +250,13 @@ class SurfaceWeightedPCA(Surface):
             filename=weighted_pca_data_file,
             mpol=6,
             ntor=6,
+            exact_radii=False,
         ):
-        self.major_radius = major_radius
-        self.minor_radius = minor_radius
+        self._major_radius = major_radius
+        self._minor_radius = minor_radius
         self.nfp = nfp
         self.dimension = dimension
+        self.exact_radii = exact_radii
 
         with h5py.File(filename) as f:
             self.n_theta = f['n_theta'][()]
@@ -300,13 +303,38 @@ class SurfaceWeightedPCA(Surface):
         print("PCA space:", PCA_space)
         original_space = self.pca.inverse_transform(PCA_space)
 
-        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self.minor_radius + self.major_radius
-        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self.minor_radius
+        R = original_space[0, :self.n_theta * self.n_phi].reshape((self.n_phi, self.n_theta)) * self._minor_radius + self._major_radius
+        Z = original_space[0, self.n_theta * self.n_phi:].reshape((self.n_phi, self.n_theta)) * self._minor_radius
         X = R * np.cos(2 * np.pi * self.surface.quadpoints_phi[:, None])
         Y = R * np.sin(2 * np.pi * self.surface.quadpoints_phi[:, None])
         gamma = np.concatenate((X[:, :, None], Y[:, :, None], Z[:, :, None]), axis=2)
         self.surface.least_squares_fit(gamma)
 
+        if self.exact_radii:
+            # First vary Delta(1,0) to enforce exact aspect ratio. This is a single degree of freedom, so we can do a 1D root solve.
+            target_aspect_ratio = self._major_radius / self._minor_radius
+
+            def aspect_residual(x):
+                x0 = self.surface.x.copy()
+                x0[0] = x
+                self.surface.x = x0
+                return (
+                    self.surface.aspect_ratio()
+                    - target_aspect_ratio
+                )
+
+            try:
+                root = optimize.newton(aspect_residual, x0=self._major_radius)
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    "Failed to enforce exact radii with 1D root solve for Delta(1,0)."
+                ) from exc
+
+            aspect_residual(root)  # Set the major radius to the final value from the root solve
+
+            # Now scale all the Fourier amplitudes to match the desired minor radius.
+            scale = self._minor_radius / self.surface.minor_radius()
+            self.surface.x = self.surface.x * scale
     def to_RZFourier(self):
         # Return a copy of the surface rather than the original surface so that
         # if e.g. change_resolution() is called, it doesn't break the internal state.
