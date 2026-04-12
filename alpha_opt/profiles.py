@@ -63,7 +63,7 @@ def plot_profiles(output_path="profiles_for_alpha_opt.pdf"):
 
     colors = ['g', 'r', 'b', 'm']
     for ax, y, ylabel, title, color in zip(axes, y_data, y_labels, titles, colors):
-        ax.plot(s, y, color=color)
+        ax.plot(rho, y, color=color)
         ax.set_xlim(0.0, 1.0)
         ax.set_xlabel("Normalized minor radius $\\rho$")
         ax.set_ylabel(ylabel)
