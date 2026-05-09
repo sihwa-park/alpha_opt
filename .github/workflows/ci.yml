@@ -60,7 +60,7 @@ jobs:
 
     - name: Run MPI test_usable_space
       run: |
-        mpiexec -n 2 pytest tests/test_usable_space.py::test_usable_space
+        mpiexec --oversubscribe -n 2 pytest tests/test_usable_space.py::test_usable_space
 
     #- name: Run MPI tests
     #  run: ./run_tests_mpi
