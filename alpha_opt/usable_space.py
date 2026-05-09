@@ -212,6 +212,9 @@ def measure_usable_space(
     print_every=10,
     max_B_target=12.0,
     max_B_iterations=1,
+    save_intermediate=True,
+    save_interval_seconds=30,
+    save_dir=".",
 ):
     """Measure the fraction of parameter space in which vmec converges, using a
     weighted PCA or Garabedian quantile surface with max_B iteration machinery.
@@ -255,6 +258,16 @@ def measure_usable_space(
         Target maximum magnetic field strength in Tesla. Default is 12.0.
     max_B_iterations : int
         Number of iterations to adjust phiedge to match max_B_target. Default is 1.
+    save_intermediate : bool
+        If True, each MPI rank periodically writes a plaintext checkpoint file
+        with its running totals so results can be recovered if the job is killed.
+        Default is True.
+    save_interval_seconds : float
+        How often (in seconds) each rank writes its checkpoint file.
+        Default is 30.
+    save_dir : str
+        Directory in which to write checkpoint files. Default is "." (current
+        working directory).
 
     Returns
     -------
@@ -355,6 +368,17 @@ def measure_usable_space(
     n_successes = 0
     n_good_iota = 0
 
+    checkpoint_path = os.path.join(save_dir, f"usable_space_rank{rank:04d}.txt")
+    last_save_time = start_time
+
+    def write_checkpoint():
+        with open(checkpoint_path, "w") as _f:
+            _f.write(f"rank={rank}\n")
+            _f.write(f"n_trials={n_trials}\n")
+            _f.write(f"n_successes={n_successes}\n")
+            _f.write(f"n_good_iota={n_good_iota}\n")
+            _f.write(f"elapsed_seconds={time.time() - start_time:.1f}\n")
+
     def print_status():
         success_frac = n_successes / n_trials if n_trials > 0 else 0
         print(
@@ -388,7 +412,15 @@ def measure_usable_space(
         if n_trials % print_every == 0:
             print_status()
 
+        if save_intermediate:
+            now = time.time()
+            if now - last_save_time >= save_interval_seconds:
+                write_checkpoint()
+                last_save_time = now
+
     print_status()
+    if save_intermediate:
+        write_checkpoint()
 
     # Sum results across all MPI processes
     line_width = 60
