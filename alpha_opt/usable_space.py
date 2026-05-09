@@ -144,7 +144,8 @@ def measure_usable_space_pca_old(
 
     while True:
         elapsed_minutes = (time.time() - start_time) / 60
-        if elapsed_minutes > minutes:
+        if elapsed_minutes > minutes and n_trials > 0:
+            # If the PCA takes a long time, make sure to complete at least one trial before breaking, so that we have some data to return.
             break
 
         surf.x = (np.random.rand(n_dimensions) * 2 - 1) * x_max
@@ -319,6 +320,7 @@ def measure_usable_space(
             mpol=mpol,
             ntor=mpol,
             filename=h5_filepath,
+            seed=rank,
         )
         n_dofs = len(surface.x)
 
@@ -361,7 +363,8 @@ def measure_usable_space(
 
     while True:
         elapsed_minutes = (time.time() - start_time) / 60
-        if elapsed_minutes > minutes:
+        if elapsed_minutes > minutes and n_trials > 0:
+            # If the PCA takes a long time, make sure to complete at least one trial before breaking, so that we have some data to return.
             break
 
         # Sample parameters uniformly from [min_for_each_dof, 1 - min_for_each_dof]

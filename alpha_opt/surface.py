@@ -111,6 +111,7 @@ class SurfaceGarabedianQuantiles(Surface):
         ntor,
         filename=Garabedian_data_file,
         exact_radii=False,
+        seed=0,
     ):
         self._major_radius = major_radius
         self._minor_radius = minor_radius
@@ -218,7 +219,7 @@ class SurfaceGarabedianQuantiles(Surface):
         # Transform variable Garabedian amplitudes only
         ##########################################################
 
-        np.random.seed(0)
+        np.random.seed(seed)
         self.transformer = WeightedQuantileTransformer()
         self.transformer.fit(data_variable, sample_weight=weights)
 
