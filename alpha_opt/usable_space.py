@@ -323,6 +323,7 @@ def measure_usable_space(
             minor_radius,
             n_pca_components,
             filename=h5_filepath,
+            exact_radii=True,
         )
         n_dofs = n_pca_components
     else:  # Garabedian
@@ -334,6 +335,7 @@ def measure_usable_space(
             ntor=mpol,
             filename=h5_filepath,
             seed=rank,
+            exact_radii=True,
         )
         n_dofs = len(surface.x)
 
