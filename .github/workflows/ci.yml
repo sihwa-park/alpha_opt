@@ -36,8 +36,15 @@ jobs:
         python -m pip install --upgrade pip
         pip --version
 
+    - name: Install OpenMPI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openmpi-bin libopenmpi-dev
+
     - name: Install dependencies
-      run: pip install -r requirements.txt
+      run: |
+        pip install -r requirements.txt
+        pip install mpi4py
   
     - name: Install package
       run: pip install -v -e .
@@ -46,6 +53,10 @@ jobs:
       run: |
         cd tests
         pytest
+
+    - name: Run MPI test_usable_space
+      run: |
+        mpiexec -n 2 pytest tests/test_usable_space.py::test_usable_space
 
     #- name: Run MPI tests
     #  run: ./run_tests_mpi
