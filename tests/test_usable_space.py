@@ -1,26 +1,7 @@
 import numpy as np
 import pytest
 import alpha_opt.usable_space as usable_space
-from alpha_opt.usable_space import measure_usable_space_pca_old, measure_usable_space
-
-
-@pytest.mark.parametrize("space", ["Garabedian", "RealSpace"])
-def test_usable_space_pca_old(space):
-    print(f"Testing space: {space}")
-    n_trials, n_successes, n_good_iota, success_fraction, n_good_iota_fraction = (
-        measure_usable_space_pca_old(
-            minutes=0.1,
-            space=space,
-        )
-    )
-    np.testing.assert_array_less(0, n_trials)
-    np.testing.assert_array_less(0, n_successes)
-    np.testing.assert_array_less(success_fraction, 1.0)
-    np.testing.assert_array_less(0.0, success_fraction)
-    np.testing.assert_array_less(0, n_good_iota)
-    np.testing.assert_array_less(n_good_iota, n_trials)
-    np.testing.assert_array_less(n_good_iota_fraction, 1.0)
-    np.testing.assert_array_less(0.0, n_good_iota_fraction)
+from alpha_opt.usable_space import measure_usable_space
 
 
 @pytest.mark.parametrize(
