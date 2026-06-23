@@ -1,0 +1,47 @@
+# Configuration for experiment/botorch_optimize.py
+# Single-process, synchronous BoTorch optimization with qLogNEI (q=1).
+# initial_observations: ""
+# ----- Stellarator geometry -----
+aspect_ratio: 6.0
+# Leave minor_radius null to use the default formula 3.1 / aspect_ratio**0.38.
+minor_radius: null
+max_B_target: 12.0
+max_B_iterations: 1
+
+# ----- Surface parameterization (Garabedian space) -----
+mpol: 2
+ntor: 2
+# Bounds on every DOF are [x_min, 1 - x_min]:
+x_min: 0.1
+data_file: "data/20260402-01_prepare_weighted_data_nfpAtLeast3_Garabedian.h5"
+
+# ----- VMEC input -----
+vmec_input_file: "data/input.new_vmec"
+
+# ----- Alpha particle tracing -----
+vacuum: false
+n_particles: 25000
+t_max: 0.1
+tau: 0.1
+tol: 1.0e-6
+maxloss: 0.02
+min_dt: 1.0e-9
+t_block: 1.0e-3
+
+# ----- BoTorch optimization -----
+num_initial: 30        # Sobol initial design points
+num_evals: 800         # Total evaluations (Sobol + BO)
+num_restarts: 10       # Restarts for acquisition optimizer
+raw_samples: 200       # Raw samples for acquisition optimizer
+prune_baseline: true   # qLogNEI baseline pruning
+# initial_observations: "alpha_opt/runs/good-violet-33"
+kernel: "matern"
+acquisition: "ei"
+parameterization: "garabedian_quantiles"  # "garabedian_quantiles", "garabedian_linear"
+use_gp_constraints: false  # Whether to train a GP constraint model and use it in acquisition optimization
+
+# ----- Logging / persistence -----
+save_frequency: 10     # Save state + upload wandb artifact every N evals
+wandb_project: "garabedian_qt_penalty"
+state_file: "botorch_state.json"
+csv_file: "evals.csv"

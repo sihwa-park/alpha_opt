@@ -160,7 +160,7 @@ x_scale = np.ones(dim_x)
 #    helicity_n=1,
 #)
 #
-#wrapped_objective = get_objective(vmec, surface, x_scale, qs.total, fail_val=fail_val)
+#wrapped_objective = get_objective(vmec, surface, x_scaxle, qs.total, fail_val=fail_val)
 
 def raw_objective():
     wout_filename = "wout_tmp.nc"

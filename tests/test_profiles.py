@@ -6,7 +6,7 @@ import scipy.stats as stats
 from scipy.interpolate import interp1d
 import vmecpp
 from alpha_opt import DATA_DIR
-from alpha_opt.profiles import n_m3_func, T_keV_func, DT_reaction_rate, relative_DT_reaction_rate_for_our_profiles, sample_alpha_birth_s
+from alpha_opt.tracing.profiles import n_m3_func, T_keV_func, DT_reaction_rate, relative_DT_reaction_rate_for_our_profiles, sample_alpha_birth_s
 
 def test_pressure_profile_matches_vmec():
     """Ensure that the profiles in python match the pressure profile in VMEC."""

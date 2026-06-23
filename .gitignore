@@ -209,3 +209,8 @@ __marimo__/
 *~
 .pymon
 usable_space_rank*
+
+runs/*
+
+alpha_opt/visualization/*
+.claude

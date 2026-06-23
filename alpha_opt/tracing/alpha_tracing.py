@@ -270,4 +270,4 @@ def compute_alpha_loss(
 
     return alpha_loss_objective_from_times(
         particle_data["last_time"], tau, maxloss, t_max
-    )[0]
+    )

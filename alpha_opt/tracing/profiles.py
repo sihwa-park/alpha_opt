@@ -24,7 +24,7 @@ def relative_DT_reaction_rate_for_our_profiles(s):
 """Using rejection sampling, sample s according to the alpha birth profile."""
 def sample_alpha_birth_s():
     bound = 1.0
-    x = np.random.uniform()
+    x = np.random.uniform(low=0.0, high=0.95) # change s range to [0, 0.95]
     y = bound * np.random.uniform()
 
     while relative_DT_reaction_rate_for_our_profiles(x) < y:

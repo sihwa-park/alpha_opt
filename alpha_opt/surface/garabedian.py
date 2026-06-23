@@ -5,97 +5,10 @@ from scipy import optimize
 from simsopt.geo import Surface, SurfaceRZFourier, SurfaceGarabedian
 from weightedpca import WeightedQuantileTransformer
 
-Garabedian_data_file = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "data",
-        "20260303-02_prepare_weighted_Garabedian_data_conservative_noNfp2.h5",
-    )
-)
-
-
 """Create an optimizable SurfaceGarabedian.
 
 The aspect ratio, major radius, and minor radius are all fixed.
 """
-
-
-def init_optimizable_surface(
-    m_max,
-    n_max,
-    nfp,
-    major_radius,
-    minor_radius,
-    elongation=2.0,
-    scale=True,
-    exponential_spectral_scaling_alpha=1.0,
-    verbose=True,
-):
-    pre_surface = SurfaceRZFourier(
-        mpol=m_max,
-        ntor=n_max,
-        nfp=nfp,
-    )
-    pre_surface.make_rotating_ellipse(
-        major_radius=major_radius,
-        minor_radius=minor_radius,
-        elongation=elongation,
-        torsion=minor_radius,
-    )
-    # pre_surface.change_resolution(mpol=m_max, ntor=n_max)
-
-    # For Garabedian, don't set mmin = -mmax. Instead center them about 1.
-    # surface = SurfaceGarabedian(mmax=2, mmin=0, nmax=1, nmin=-1)
-    surface = SurfaceGarabedian.from_RZFourier(pre_surface)
-    # surface.change_resolution(mmax=2, mmin=0, nmax=1, nmin=-1)
-    if verbose:
-        print("initial x:", surface.x)
-        print(surface.local_dof_names)
-    # exit(0)
-    surface.set("Delta(1,0)", major_radius)  # Set major radius
-    surface.set("Delta(0,0)", minor_radius)  # Set minor radius
-    surface.fix("Delta(0,0)")  # Minor radius
-    surface.fix("Delta(1,0)")  # Major radius
-    dim_x = len(surface.x)
-    if verbose:
-        print("x:", surface.x)
-        print("dof_names:", surface.dof_names)
-    # vmec._should_save_outputs = True  # If you want wout files to be generated.
-
-    # Compute x_scale for the dofs.
-    if scale:
-        # See ~/work24/20240415-01 Generating random stellarator boundary shapes.docx
-        # exponential_spectral_scaling_alpha = 1.0
-        ms = []
-        ns = []
-        for m in range(surface.mmin, surface.mmax + 1):
-            for n in range(surface.nmin, surface.nmax + 1):
-                if n == 0 and m in [0, 1]:
-                    continue
-                ms.append(m)
-                ns.append(n)
-
-        ms = np.array(ms)
-        ns = np.array(ns)
-        dof_names_should_be = [f"Delta({m},{n})" for m, n in zip(ms, ns)]
-        assert (
-            surface.local_dof_names == dof_names_should_be
-        ), f"Expected {dof_names_should_be}, got {surface.local_dof_names}"
-        x_scale = np.exp(
-            -exponential_spectral_scaling_alpha * np.sqrt((ms - 1) ** 2 + ns**2)
-        )
-    else:
-        x_scale = np.ones_like(surface.x)
-
-    if verbose:
-        print("x_scale:", x_scale)
-
-    x0 = surface.x / x_scale
-
-    return surface, dim_x, x_scale, x0
-
-
 class SurfaceGarabedianQuantiles(Surface):
     """Similar to SurfaceGarabedian, but the dofs are scaled using a data
     distribution to lie in [0, 1].
@@ -109,7 +22,7 @@ class SurfaceGarabedianQuantiles(Surface):
         minor_radius,
         mpol,
         ntor,
-        filename=Garabedian_data_file,
+        filename=None,
         exact_radii=False,
         seed=0,
     ):
@@ -221,7 +134,7 @@ class SurfaceGarabedianQuantiles(Surface):
 
         np.random.seed(seed)
         self.transformer = WeightedQuantileTransformer()
-        self.transformer.fit(data_variable, sample_weight=weights)
+        self.transformer.fit(data_variable, weights=weights)
 
         x0 = np.full(len(self.ms_variable), 0.5)
         super().__init__(x0=x0)
@@ -269,6 +182,184 @@ class SurfaceGarabedianQuantiles(Surface):
             self.surface_garabedian.set_Delta(1, 0, root)
 
             # Now scale all the Delta(m,n) parameters to match the desired minor radius.
+            scale = self._minor_radius / self.surface_garabedian.to_RZFourier().minor_radius()
+            self.surface_garabedian.x = self.surface_garabedian.x * scale
+
+        self.surface_rz_fourier = self.surface_garabedian.to_RZFourier()
+
+    def to_RZFourier(self):
+        return self.surface_rz_fourier
+    
+class SurfaceGarabedianLinear(Surface):
+    """Like SurfaceGarabedianQuantiles, but uses a linear [0,1] normalization.
+
+    The [0,1] DOF space is mapped linearly to the [q05, q95] weighted quantile
+    range of each Garabedian mode in the training data, so x=0 corresponds to
+    the 5th percentile and x=1 to the 95th percentile.
+    """
+
+    def __init__(
+        self,
+        nfp,
+        major_radius,
+        minor_radius,
+        mpol,
+        ntor,
+        filename=None,
+        exact_radii=False,
+        seed=0,
+    ):
+        self._major_radius = major_radius
+        self._minor_radius = minor_radius
+        self.exact_radii = exact_radii
+        self.nfp = nfp
+        self.mpol = mpol
+        self.ntor = ntor
+
+        self.mmax = mpol + 1
+        self.mmin = -mpol + 1
+        self.nmax = ntor
+        self.nmin = -ntor
+
+        self.surface_garabedian = SurfaceGarabedian(
+            nfp=self.nfp,
+            mmax=self.mmax,
+            nmax=self.nmax,
+            mmin=self.mmin,
+            nmin=self.nmin,
+        )
+
+        with h5py.File(filename, "r") as f:
+            data_all = f["data"][()]
+            weights = f["weights"][()]
+            ms_all = f["ms"][()]
+            ns_all = f["ns"][()]
+
+        print("Full data shape:", data_all.shape)
+        print("Number of configurations:", data_all.shape[0])
+        print("Number of Garabedian modes in file:", data_all.shape[1])
+
+        mask_keep = (
+            (ms_all >= -mpol + 1)
+            & (ms_all <= mpol + 1)
+            & (ns_all >= -ntor)
+            & (ns_all <= ntor)
+        )
+
+        if not np.any(mask_keep):
+            raise RuntimeError("No modes selected. Check mpol and ntor.")
+
+        ms_selected = ms_all[mask_keep]
+        ns_selected = ns_all[mask_keep]
+        data_selected = data_all[:, mask_keep]
+
+        sort_idx = np.lexsort((ns_selected, ms_selected))
+        ms_selected = ms_selected[sort_idx]
+        ns_selected = ns_selected[sort_idx]
+        data_selected = data_selected[:, sort_idx]
+        self.ms_selected = ms_selected
+        self.ns_selected = ns_selected
+
+        idx_00 = np.where((ms_selected == 0) & (ns_selected == 0))[0]
+        idx_10 = np.where((ms_selected == 1) & (ns_selected == 0))[0]
+        if idx_00.size != 1:
+            raise RuntimeError(
+                "Expected exactly one (m,n)=(0,0) mode in selected range."
+            )
+        if idx_10.size != 1:
+            raise RuntimeError(
+                "Expected exactly one (m,n)=(1,0) mode in selected range."
+            )
+        idx_00 = idx_00[0]
+        idx_10 = idx_10[0]
+        self.idx_00 = idx_00
+        self.idx_10 = idx_10
+
+        fixed_mask = ((ms_selected == 0) & (ns_selected == 0)) | (
+            (ms_selected == 1) & (ns_selected == 0)
+        )
+        variable_mask = ~fixed_mask
+        self.variable_mask = variable_mask
+
+        self.ms_variable = ms_selected[variable_mask]
+        self.ns_variable = ns_selected[variable_mask]
+        data_variable = data_selected[:, variable_mask]
+
+        print("Selected total modes:", data_selected.shape[1])
+        print("Variable modes (number of dofs):", data_variable.shape[1])
+
+        if data_variable.shape[1] == 0:
+            raise RuntimeError(
+                "No variable modes available after fixing (0,0) and (1,0)."
+            )
+
+        expected_mode_set = {
+            (m, n)
+            for m in range(self.mmin, self.mmax + 1)
+            for n in range(self.nmin, self.nmax + 1)
+        }
+        selected_mode_set = {(int(m), int(n)) for m, n in zip(ms_selected, ns_selected)}
+        if selected_mode_set != expected_mode_set:
+            missing = sorted(expected_mode_set - selected_mode_set)
+            extra = sorted(selected_mode_set - expected_mode_set)
+            raise RuntimeError(
+                "Selected modes do not match required rectangular grid. "
+                f"Missing: {missing[:5]}{'...' if len(missing) > 5 else ''}, "
+                f"Extra: {extra[:5]}{'...' if len(extra) > 5 else ''}"
+            )
+
+        np.random.seed(seed)
+        n_dofs = data_variable.shape[1]
+        # w = weights /weights.sum(axis=0, keepdims=True)
+        # sorted_idx = np.argsort(data_variable, axis=0)          # [n, d]
+        # sorted_data = np.take_along_axis(data_variable, sorted_idx, axis=0)
+        # cumw = np.cumsum(np.take_along_axis(w, sorted_idx, axis=0), axis=0)                # [n, d]
+        # self.lower = np.array([np.interp(0.05, cumw[:, j], sorted_data[:, j]) for j in range(n_dofs)])
+        # self.upper = np.array([np.interp(0.95, cumw[:, j], sorted_data[:, j]) for j in range(n_dofs)])
+        self.lower = np.percentile(data_variable, 5, axis=0)
+        self.upper = np.percentile(data_variable, 95, axis=0)
+
+        x0 = np.full(n_dofs, 0.5)
+        super().__init__(x0=x0)
+
+    def recompute_bell(self, parent=None):
+        variable_original = (
+            self.lower + self.x * (self.upper - self.lower)
+        ) * self._minor_radius
+
+        full_values = np.zeros(self.ms_selected.size)
+        full_values[self.idx_00] = self._minor_radius
+        full_values[self.idx_10] = self._major_radius
+        full_values[self.variable_mask] = variable_original
+
+        mode_map = {
+            (int(m), int(n)): float(v)
+            for m, n, v in zip(self.ms_selected, self.ns_selected, full_values)
+        }
+
+        for m in range(self.mmin, self.mmax + 1):
+            for n in range(self.nmin, self.nmax + 1):
+                self.surface_garabedian.set_Delta(m, n, mode_map[(m, n)])
+
+        if self.exact_radii:
+            target_aspect_ratio = self._major_radius / self._minor_radius
+
+            def aspect_residual(x):
+                self.surface_garabedian.set_Delta(1, 0, x)
+                return (
+                    self.surface_garabedian.to_RZFourier().aspect_ratio()
+                    - target_aspect_ratio
+                )
+
+            try:
+                root = optimize.newton(aspect_residual, x0=self._major_radius)
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    "Failed to enforce exact radii with 1D root solve for Delta(1,0)."
+                ) from exc
+
+            self.surface_garabedian.set_Delta(1, 0, root)
+
             scale = self._minor_radius / self.surface_garabedian.to_RZFourier().minor_radius()
             self.surface_garabedian.x = self.surface_garabedian.x * scale
 

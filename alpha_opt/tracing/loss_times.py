@@ -42,6 +42,34 @@ def time_at_which_energy_loss_exceeds(times, tau, threshold, t_max):
             return t
     return t_max  # If threshold is never reached
 
+def variance_case2(times, tau, t_max, epsilon):
+    """
+    Closed-form (delta method) variance of the case-2 objective:
+        obj = log10(ELF + eps) - log10(t_max) - log10(threshold + eps)
+    
+    Steps:
+        1. Compute per-particle contributions X_i (exact)
+        2. Compute Var(ELF) = s² / N  (exact, no approximation) where s² = (1/(N-1)) Σ(X_i - ELF)²  is the unbiased sample variance of the X_i (Bessel's correction, ddof=1)
+        3. Propagate through log10 via delta method (first-order Taylor)
+    """
+    N = len(times)
+
+    # step 1: per-particle energy-loss contributions
+    # survivors (t_i == t_max) contribute 0; lost particles contribute exp(-t_i/tau)
+    X = np.where(times < t_max, np.exp(-times / tau), 0.0)
+
+    # step 2: ELF and its variance (exact, no Taylor here)
+    ELF = X.mean()
+    var_ELF = X.var(ddof=1) / N       # Var(sample mean) = sample variance / N
+
+    # step 3: delta method through log10(ELF + eps)
+    # h(u) = log10(u + eps),  h'(u) = 1 / ((u + eps) * ln10)
+    ln10 = np.log(10.0)
+    h_prime = 1.0 / ((ELF + epsilon) * ln10)
+    var_obj = h_prime**2 * var_ELF    # Var(h(ELF)) ≈ h'(ELF)^2 * Var(ELF)
+
+    return var_obj, ELF
+
 def alpha_loss_objective_from_times(times, tau, threshold, t_max, epsilon=1.0/25000, verbose=True):
     """
     Objective function based on the energy loss as a function of time.
@@ -62,7 +90,7 @@ def alpha_loss_objective_from_times(times, tau, threshold, t_max, epsilon=1.0/25
     - verbose: If True, print detailed information.
     """
     number_loss_fraction, energy_loss_fraction = compute_energy_loss_fraction(times, tau)
-
+    var_obj = 1e-5  # default value for case 0 and case 1
     if threshold >= 1.0:
         # Simple objective based on energy loss fraction only.
         objective = -np.log10(energy_loss_fraction)
@@ -84,8 +112,9 @@ def alpha_loss_objective_from_times(times, tau, threshold, t_max, epsilon=1.0/25
                 -np.log10(t_max)
                 -np.log10(threshold + epsilon)
             )
+            var_obj, _ = variance_case2(times, tau, t_max, epsilon)
             case = 2
             if verbose:
                 print(f"Alpha loss objective case 2: energy loss fraction: {energy_loss_fraction}, objective: {objective}")
 
-    return objective, case
+    return objective, case, var_obj
