@@ -16,7 +16,7 @@ x_min: 0.0
 data_file: "/home/sp2582/alpha_opt/data/20260402-01_prepare_weighted_data_nfpAtLeast3_Garabedian.h5"
 
 # ----- VMEC input -----
-vmec_input_file: "/home/sp2582/alpha_opt/data/input.new_vmec"
+vmec_input_file: "/home/sp2582/alpha_opt/data/input.vmec"
 
 # ----- Alpha particle tracing -----
 vacuum: false
@@ -42,6 +42,6 @@ use_gp_constraints: true  # Whether to train a GP constraint model and use it in
 
 # ----- Logging / persistence -----
 save_frequency: 10     # Save state + upload wandb artifact every N evals
-wandb_project: "garabedian_linear_cei"
+wandb_project: "garabedian_linear_cei_pressure"
 state_file: "botorch_state.json"
 csv_file: "evals.csv"

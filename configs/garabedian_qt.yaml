@@ -13,10 +13,10 @@ mpol: 2
 ntor: 2
 # Bounds on every DOF are [x_min, 1 - x_min]:
 x_min: 0.1
-data_file: "data/20260402-01_prepare_weighted_data_nfpAtLeast3_Garabedian.h5"
+data_file: "/home/sp2582/alpha_opt/data/20260402-01_prepare_weighted_data_nfpAtLeast3_Garabedian.h5"
 
 # ----- VMEC input -----
-vmec_input_file: "data/input.new_vmec"
+vmec_input_file: "/home/sp2582/alpha_opt/data/input.new_vmec"
 
 # ----- Alpha particle tracing -----
 vacuum: false

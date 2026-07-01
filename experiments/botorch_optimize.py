@@ -170,7 +170,7 @@ def evaluate(x, objective, vmec, cfg, trial_index, run_name) -> EvalResult:
 # GP proposal
 # ---------------------------------------------------------------------------
 
-def propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t=None, C_t=None) -> tuple[np.ndarray, float, dict, float]:
+def propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t=None, C_t=None) -> tuple[np.ndarray, float, dict, float, float]:
     """Fit a GP on successful trials and return the next candidate."""
     device = bounds.device
     if cfg["kernel"] == "matern":
@@ -229,17 +229,20 @@ def propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t=None, C_t=None) -> tuple[np.
             q=1,
             num_restarts=cfg["num_restarts"],
             raw_samples=cfg["raw_samples"],
+            options={"batch_limit": 200},
         )
         with torch.no_grad():
-            candidate_variance = model.posterior(candidate).variance.squeeze().item()
-        return candidate.squeeze(0), float(acq_val.item()), gp_hparams, candidate_variance
+            posterior = model.posterior(candidate)
+            candidate_mean = -posterior.mean.squeeze().item()  # un-negate back to loss space
+            candidate_variance = posterior.variance.squeeze().item()
+        return candidate.squeeze(0), float(acq_val.item()), gp_hparams, candidate_mean, candidate_variance
     elif cfg["acquisition"] == "cei":
         acq = qLogNoisyExpectedImprovement(
             model=model,
             X_baseline=X_t,
             prune_baseline=cfg["prune_baseline"],
             objective=GenericMCObjective(lambda Z, X=None: Z[..., 0]),
-            constraints=[lambda Z: Z[..., 1]],  # specify that the second model's output (the constraint) should be <= 0
+            constraints=[lambda Z: Z[..., 1]],  # specify that the second model's output (the constraint) should be <= 0,
         )
         candidate, acq_val = optimize_acqf(
             acq_function=acq,
@@ -247,16 +250,21 @@ def propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t=None, C_t=None) -> tuple[np.
             q=1,
             num_restarts=cfg["num_restarts"],
             raw_samples=cfg["raw_samples"],
+            options={"batch_limit": 200},
         )
         with torch.no_grad():
-            candidate_variance = model.models[0].posterior(candidate).variance.squeeze().item()
-        return candidate.squeeze(0), float(acq_val.item()), gp_hparams, candidate_variance
+            posterior = model.models[0].posterior(candidate)
+            candidate_mean = -posterior.mean.squeeze().item()  # un-negate back to loss space
+            candidate_variance = posterior.variance.squeeze().item()
+        return candidate.squeeze(0), float(acq_val.item()), gp_hparams, candidate_mean, candidate_variance
     elif cfg["acquisition"] == "ts":
         paths = draw_matheron_paths(model, sample_shape=torch.Size([1]))
         optimal_input, optimal_output = optimize_posterior_samples(paths=paths, bounds=bounds, num_restarts=cfg["num_restarts"], raw_samples=cfg["raw_samples"])
         with torch.no_grad():
-            candidate_variance = model.posterior(optimal_input).variance.squeeze().item()
-        return optimal_input.squeeze(0), float(optimal_output.item()), gp_hparams, candidate_variance
+            posterior = model.posterior(optimal_input)
+            candidate_mean = -posterior.mean.squeeze().item()  # un-negate back to loss space
+            candidate_variance = posterior.variance.squeeze().item()
+        return optimal_input.squeeze(0), float(optimal_output.item()), gp_hparams, candidate_mean, candidate_variance
     else:
         raise ValueError(f"Unsupported acquisition function: {cfg['acquisition']}")
 
@@ -412,8 +420,9 @@ def main():
     ])
     print(f"Per-DOF bounds: [{x_min}, {1.0 - x_min}]")
 
-    state_file = cfg["state_file"]
-    csv_file = cfg["csv_file"]
+    state_file = f"alpha_opt/runs/{run_name}/{cfg['state_file']}"
+    csv_file = f"alpha_opt/runs/{run_name}/{cfg['csv_file']}"
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
     num_initial = cfg["num_initial"]
     num_evals = cfg["num_evals"]
     save_frequency = cfg.get("save_frequency", 10)
@@ -499,7 +508,7 @@ def main():
     for i in range(trial_index, num_evals):
         t_gen = time.time()
         acq_val = None
-        x, acq_val, gp_hparams, candidate_variance = propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t, C_t)
+        x, acq_val, gp_hparams, candidate_mean, candidate_variance = propose_next(X_t, Y_t, Y_var, bounds, cfg, Xc_t, C_t)
         gen_time = time.time() - t_gen
         print(f"Iteration {i}: candidate generated in {gen_time:.2f}s, "
                 f"acq={acq_val:.4e}")
@@ -525,15 +534,11 @@ def main():
                 Y_var = torch.cat([Y_var, torch.tensor([penalty_var], dtype=torch.double, device=device)])
                 result.loss = penalty
 
-        # Z-score of the new observation against the sample mean/variance of
-        # all prior observations (excludes the point just appended above and
-        # any prior penalty/failed points).
-        prior_y = Y_t[:-1]
-        prior_y = prior_y[prior_y != penalty]
-        if prior_y.numel() >= 2:
-            prior_mean = prior_y.mean().item()
-            prior_std = prior_y.std().item()
-            z_score = (Y_t[-1].item() - prior_mean) / prior_std if prior_std > 0 else float("nan")
+        # Z-score of the observed loss against the GP's predictive mean/variance
+        # for the candidate (computed before the true outcome was observed).
+        predictive_std = candidate_variance ** 0.5 if candidate_variance > 0 else None
+        if result.loss is not None and predictive_std:
+            z_score = (result.loss - candidate_mean) / predictive_std
         else:
             z_score = float("nan")
 

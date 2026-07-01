@@ -12,7 +12,7 @@ max_B_iterations: 1
 mpol: 2
 ntor: 2
 # Bounds on every DOF are [x_min, 1 - x_min]:
-x_min: 0.0
+x_min: 0.1
 data_file: "/home/sp2582/alpha_opt/data/20260402-01_prepare_weighted_data_nfpAtLeast3_Garabedian.h5"
 
 # ----- VMEC input -----
@@ -37,11 +37,11 @@ prune_baseline: true   # qLogNEI baseline pruning
 # initial_observations: "alpha_opt/runs/good-violet-33"
 kernel: "matern"
 acquisition: "cei"
-parameterization: "garabedian_linear"  # "garabedian_quantiles", "garabedian_linear"
+parameterization: "garabedian_quantiles"  # "garabedian_quantiles", "garabedian_linear"
 use_gp_constraints: true  # Whether to train a GP constraint model and use it in acquisition optimization
 
 # ----- Logging / persistence -----
 save_frequency: 10     # Save state + upload wandb artifact every N evals
-wandb_project: "garabedian_linear_cei"
+wandb_project: "garabedian_qt_cei"
 state_file: "botorch_state.json"
 csv_file: "evals.csv"

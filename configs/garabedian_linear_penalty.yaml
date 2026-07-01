@@ -36,12 +36,12 @@ raw_samples: 200       # Raw samples for acquisition optimizer
 prune_baseline: true   # qLogNEI baseline pruning
 # initial_observations: "alpha_opt/runs/good-violet-33"
 kernel: "matern"
-acquisition: "cei"
+acquisition: "ei"
 parameterization: "garabedian_linear"  # "garabedian_quantiles", "garabedian_linear"
-use_gp_constraints: true  # Whether to train a GP constraint model and use it in acquisition optimization
+use_gp_constraints: false  # Whether to train a GP constraint model and use it in acquisition optimization
 
 # ----- Logging / persistence -----
 save_frequency: 10     # Save state + upload wandb artifact every N evals
-wandb_project: "garabedian_linear_cei"
+wandb_project: "garabedian_linear_penalty"
 state_file: "botorch_state.json"
 csv_file: "evals.csv"
