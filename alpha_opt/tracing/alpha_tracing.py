@@ -29,7 +29,7 @@ else:
         BoozerRadialInterpolant,
         InterpolatedBoozerField,
     )
-    from firm3d.util.gpu_utils import boozer_interpolant
+    from firm3d.catapult.utils import boozer_interpolant
     from firm3d.util.sampling import sample_stz as firm3d_sample_stz
     import firm3dpp
 
@@ -134,7 +134,7 @@ def generate_interpolant_and_initial_conditions(
     )
     t2 = time.time()
     srange, trange, zrange, quad_info, maxJ = boozer_interpolant(
-        field, nfp, n_metagrid_pts, vacuum=vacuum
+        field, nfp, n_metagrid_pts, n_metagrid_pts, n_metagrid_pts, vacuum=vacuum
     )
     print(f"Time for boozer_interpolant(): {time.time()-t2:.3f} s", flush=True)
 
@@ -192,6 +192,113 @@ def write_simple_start(
             )
 
 
+def trace_catapult(
+    quad_info,
+    stz_inits,
+    parallel_speeds,
+    tmax,
+    mass,
+    charge,
+    vtotal,
+    tol,
+    srange,
+    trange,
+    zrange,
+    psi0,
+    t_block,
+    maxloss,
+):
+    total_n = stz_inits.shape[0]
+    n_particles = total_n
+    current_time = np.zeros(n_particles)
+
+    dt = -np.ones(n_particles)
+    mu = -np.ones(n_particles)
+
+    # convert Boozer to pseudo-Cartesian coordinates
+    s = stz_inits[:, 0]
+    theta = stz_inits[:, 1]
+    x1 = s*np.cos(theta)
+    x2 = s*np.sin(theta)
+
+    stz_inits[:, 0] = x1
+    stz_inits[:, 1] = x2
+    stz_inits = np.ascontiguousarray(stz_inits)
+
+    # when we filter particles out for leaving
+    # we need to remember their original index
+    ids = np.arange(n_particles, dtype=int)
+    loss_times = [-1.0 for i in range(n_particles)]
+
+    n_steps = int(tmax / t_block)
+    for step in range(n_steps):
+        # keep track of the tmax we will reach at the end of the loop
+        # each particle needs to advance to step_end_time
+        local_tmax = np.maximum((step + 1) * t_block - current_time, 0.0)
+
+        # advance particles to step_end_time
+        dt = np.ascontiguousarray(dt)
+        local_tmax = np.ascontiguousarray(local_tmax)
+        mu = np.ascontiguousarray(mu)
+
+        step_data = firm3dpp.boozer_gpu_tracing(
+            quad_pts=quad_info,
+            srange=srange,
+            trange=trange,
+            zrange=zrange,
+            stz_init=stz_inits.copy(),
+            m=mass,
+            q=charge,
+            vtotal=vtotal,
+            vtang=parallel_speeds.copy(),
+            tmax=local_tmax,
+            tol=tol,
+            dt_in=dt,
+            mu_in=mu,
+            psi0=psi0,
+            nparticles=n_particles,
+            vacuum=False
+        )
+        print("finished tracing")
+        step_data = np.reshape(step_data, (n_particles, 7))
+
+        dt = step_data[:, 5].copy()
+        mu = step_data[:, 6].copy()
+
+        # compute new current time for each particle
+        step_data[:, 0] += current_time
+        current_time = step_data[:, 0]
+
+        # store data using stored indices
+        for i, idx in enumerate(ids):
+            if local_tmax[i] > 0.0:
+                loss_times[idx] = current_time[i]
+
+        # find lost particles
+        s_end = np.sqrt(step_data[:, 1]**2 + step_data[:, 2]**2)
+        idx_keep = (current_time < tmax) & (s_end < 1.0)
+
+
+
+        # remove lost particles
+        stz_inits = step_data[idx_keep, 1:4].copy()
+        parallel_speeds = step_data[idx_keep, 4].copy()
+        ids = ids[idx_keep]
+        current_time = current_time[idx_keep]
+        dt = dt[idx_keep].copy()
+        mu = mu[idx_keep].copy()
+
+        n_particles = stz_inits.shape[0]
+
+        # if energy losses have exceeded maxloss, return the time at which this occurred
+        energy_loss_fraction = np.sum([np.exp(-loss_times[i] / tmax) for i in range(len(loss_times)) if i not in ids]) / total_n
+        if(energy_loss_fraction >= maxloss):
+            print(f"Energy loss fraction {energy_loss_fraction} exceeded maxloss {maxloss}. Raw loss frac: {1-len(ids)/total_n} Returning early.")
+            return loss_times
+    
+    return loss_times
+
+
 def compute_alpha_loss(
     wout_filename,
     mbooz=12,
@@ -233,48 +340,26 @@ def compute_alpha_loss(
     print("tracing particles", flush=True)
 
     # trace on GPU
-    start_time = time.time()
-    last_time = firm3dpp.boozer_gpu_tracing(
-        quad_pts=quad_info,
-        srange=srange,
-        trange=trange,
-        zrange=zrange,
-        stz_init=stz_inits,
-        m=MASS,
-        q=CHARGE,
-        vtotal=ALPHA_BIRTH_SPEED,
-        vtang=vpar_inits,
-        tmax=t_max,
-        tol=tol,
-        psi0=field.psi0,
-        nparticles=n_particles,
-        min_dt=min_dt,
-        maxloss=maxloss,
+    tracing_start = time.time()
+    vtotal = np.sqrt(2*ENERGY / MASS)
+    loss_times = trace_catapult(
+        quad_info,  
+        stz_inits,
+        vpar_inits,
+        t_max,
+        MASS,
+        CHARGE,
+        vtotal,
+        tol,
+        srange,
+        trange,
+        zrange,
+        field.psi0,
         t_block=t_block,
-        vacuum=vacuum,
+        maxloss=maxloss
     )
-    print("Time to call firm3dpp.boozer_gpu_tracing:", time.time() - start_time)
-
-    t1 = time.time()
-    last_time = np.reshape(last_time, (n_particles, -1))
-    particle_data = pd.DataFrame(
-        {
-            "s_start": stz_inits[:, 0],
-            "t_start": stz_inits[:, 1],
-            "z_start": stz_inits[:, 2],
-            "vpar_start": vpar_inits,
-            "s_end": last_time[:, 1],
-            "t_end": last_time[:, 2],
-            "z_end": last_time[:, 3],
-            "vpar_end": last_time[:, 3],
-            "last_time": last_time[:, 0],
-        }
-    )
-    print("Time to create DataFrame with particle results:", time.time() - t1)
-    t2 = time.time()
-    particle_data.to_csv("particle_data.csv")
-    print("Time to save particle_data.csv:", time.time() - t2)
+    print(f"Tracing took {time.time() - tracing_start}\n")
 
     return alpha_loss_objective_from_times(
-        particle_data["last_time"], tau, maxloss, t_max
+        loss_times, tau, maxloss, t_max
     )
