@@ -212,5 +212,8 @@ usable_space_rank*
 
 runs/*
 
-alpha_opt/visualization/*
+alpha_opt/visualization/*.png
+alpha_opt/visualization/*.pdf
+alpha_opt/visualization/*.mp4
+alpha_opt/experiments/*/
 .claude

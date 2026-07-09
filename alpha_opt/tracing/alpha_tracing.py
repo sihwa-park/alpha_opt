@@ -85,6 +85,7 @@ def generate_interpolant_and_initial_conditions(
     n_particles=5000,
     vacuum=False,
     profiles="realistic",
+    seed=8,
 ):
     """
     Generate initial conditions for alpha particles.
@@ -140,8 +141,8 @@ def generate_interpolant_and_initial_conditions(
     # Evaluate error in interpolation
     print("Error in |B| interpolation", field.estimate_error_modB(1000), flush=True)
 
-    # set seed for consistency
-    np.random.seed(8)
+    # set seed for consistency (override with `seed` to resample particle ICs)
+    np.random.seed(seed)
 
     print("About to create stz_inits. maxJ=", maxJ)
     t3 = time.time()
@@ -204,10 +205,15 @@ def compute_alpha_loss(
     tol=1e-9,
     vacuum=False,
     profiles="realistic",
+    seed=8,
 ):
     """
     If maxloss is >= 1, this function returns the energy loss fraction at t_max.
     If maxloss < 1, it returns the time at which the energy loss fraction exceeds maxloss.
+
+    `seed` controls only the particle initial-condition sampling (see
+    `generate_interpolant_and_initial_conditions`), not the VMEC equilibrium;
+    it defaults to 8, matching the previously-hardcoded value.
     """
     print(
         f"Computing alpha losses with {n_particles} particles, t_max={t_max}, tau={tau}"
@@ -221,6 +227,7 @@ def compute_alpha_loss(
             n_particles,
             vacuum,
             profiles,
+            seed,
         )
     )
     print("tracing particles", flush=True)
