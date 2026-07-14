@@ -10,28 +10,20 @@ from scipy.io import netcdf_file
 import pandas as pd
 from booz_xform import Booz_xform
 
-from simsopt._core import Optimizable
-from simsopt.util.constants import (
+from firm3d.util.constants import (
     ALPHA_PARTICLE_MASS as MASS,
     FUSION_ALPHA_PARTICLE_ENERGY as ENERGY,
     ALPHA_PARTICLE_CHARGE as CHARGE,
 )
 
-try:
-    import firm3d
-except ImportError:
-    firm3d = None
 
-if firm3d is None:
-    from simsopt.field import BoozerRadialInterpolant, InterpolatedBoozerField
-else:
-    from firm3d.field.boozermagneticfield import (
-        BoozerRadialInterpolant,
-        InterpolatedBoozerField,
-    )
-    from firm3d.catapult.utils import boozer_interpolant
-    from firm3d.util.sampling import sample_stz as firm3d_sample_stz
-    import firm3dpp
+from firm3d.field.boozermagneticfield import (
+    BoozerRadialInterpolant,
+    InterpolatedBoozerField,
+)
+from firm3d.catapult.utils import boozer_interpolant
+from firm3d.util.sampling import sample_stz as firm3d_sample_stz
+import firm3dpp
 
     # from firm3d.util.sampling import sample_stz
 
@@ -242,19 +234,19 @@ def trace_catapult(
         mu = np.ascontiguousarray(mu)
 
         step_data = firm3dpp.boozer_gpu_tracing(
-            quad_pts=quad_info,
+            quad_pts=quad_info.astype(np.float32),
             srange=srange,
             trange=trange,
             zrange=zrange,
-            stz_init=stz_inits.copy(),
+            stz_init=stz_inits.astype(np.float32).copy(),
             m=mass,
             q=charge,
             vtotal=vtotal,
-            vtang=parallel_speeds.copy(),
+            vtang=parallel_speeds.astype(np.float32).copy(),
             tmax=local_tmax,
             tol=tol,
-            dt_in=dt,
-            mu_in=mu,
+            dt_in=dt.astype(np.float32),
+            mu_in=mu.astype(np.float32),
             psi0=psi0,
             nparticles=n_particles,
             vacuum=False
