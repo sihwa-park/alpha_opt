@@ -262,7 +262,7 @@ def draw_xsections(ax, wout_filename):
     ax.legend(fontsize=7, loc="upper right")
     ax.set_xlabel("R [m]", fontsize=8)
     ax.set_ylabel("Z [m]", fontsize=8)
-    ax.set_xlim(6.0, 13)
+    ax.set_xlim(5.5, 13)
     ax.set_ylim(-3.5, 3.5)
     ax.set_title("Cross-sections", fontsize=9)
     ax.tick_params(labelsize=7)
